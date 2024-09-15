@@ -1,0 +1,28 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+
+    <title>{% block title %}Speler2{% endblock %}</title>
+    <link rel="icon" type="image/png" sizes="32x32" href="{% static 'main/favicon-32x32.png' %}">
+    <link rel="icon" type="image/png" sizes="16x16" href="{% static 'main/favicon-16x16.png' %}">
+
+    <link rel="stylesheet" href="{% static 'main/bootstrap-5.3.3-dist/css/bootstrap.css' %}"/>
+    <link rel="stylesheet" href="{% static 'main/bootstrap-icons-1.11.3/font/bootstrap-icons.css' %}"/>
+    <link rel="stylesheet" href="{% static 'main/css/main.css' %}"/>
+
+    <script type="text/javascript" src="{% static 'main/jquery/jquery-3.7.1.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'main/bootstrap-5.3.3-dist/js/bootstrap.js' %}"></script>
+    <script type="text/javascript" src="{% static 'main/howler-2.2.4/howler.min.js' %}"></script>
+    <script type="text/javascript" src="{% static 'main/htmx-2.0.2/htmx.min.js' %}"></script>
+</head>
+
+<body>
+<div class="container-fluid min-vh-100 d-flex flex-column">
+    {% block content %}{% endblock %}
+</div>
+</body>
+
+</html>

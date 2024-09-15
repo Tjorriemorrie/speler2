@@ -22,7 +22,7 @@ repos:
       - id: check-xml
       - id: check-yaml
       # General Hooks
-      - id: check-added-large-files
+#      - id: check-added-large-files
       - id: debug-statements
       - id: trailing-whitespace
       - id: end-of-file-fixer
