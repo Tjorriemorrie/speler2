@@ -1,0 +1,34 @@
+default_language_version:
+  python: python3
+
+default_stages:
+  - commit
+
+repos:
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.3.0
+    hooks:
+      - id: ruff
+        args: [ --fix ]
+      - id: ruff-format
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Config Hooks
+      - id: check-ast
+      - id: check-json
+      - id: check-toml
+      - id: check-xml
+      - id: check-yaml
+      # General Hooks
+      - id: check-added-large-files
+      - id: debug-statements
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      # Git related hooks
+      - id: check-merge-conflict
+#      - id: no-commit-to-branch
+#        args:
+#          - "--branch=develop"
+#          - "--branch=master"
