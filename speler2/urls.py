@@ -20,4 +20,11 @@ from django.urls import path
 
 from main import views
 
-urlpatterns = [path('admin/', admin.site.urls), path('', views.home_view, name='home')]
+urlpatterns = [
+    path('admin/', admin.site.urls),
+    path('', views.home_view, name='home'),
+    path('next-song/', views.next_song_view, name='next_song'),
+    path('next-rating/', views.next_rating_view, name='next_rating'),
+    path('album-art/<int:song_id>', views.album_art_view, name='album_art'),
+    path('ranking', views.ranking_view, name='ranking'),
+]

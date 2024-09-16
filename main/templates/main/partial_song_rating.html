@@ -1,0 +1,16 @@
+{% load static %}
+{% if match %}
+    {% for song in match %}
+        <a hx-get="{% url 'next_rating' %}?winner_id={{ song.id }}"
+           hx-target="#rating-container"
+           hx-swap="innerHTML">
+            <div class="card compact-card">
+                <div class="card-body">
+                    <h5 class="card-title">{{ song.name }}</h5>
+                    <h6 class="card-subtitle text-muted">{{ song.artist.name }}</h6>
+                    <h6 class="card-subtitle text-muted">{{ song.album.name }}</h6>
+                </div>
+            </div>
+        </a>
+    {% endfor %}
+{% endif %}

@@ -1,0 +1,48 @@
+{% load static %}
+<div class="row min-vh-20 m-1">
+
+    <div class="col-2 offset-1">
+        <div id="album-art-container">
+            <img class="img-fluid" src="{% url 'album_art' song.id %}"
+                 alt="{{ song.album.name }} album art"/>
+        </div>
+    </div>
+    <div class="col-6">
+        <h2><span class="text-muted small">{{ song.track_number }}</span> {{ song.name }}</h2>
+        <h3>{{ song.artist.name }}</h3>
+        <h5><span class="text-muted small">{{ song.album.year }}</span> {{ song.album.name }}</h5>
+        <audio class="plyr" controls autoplay preload="auto">
+            <source src="{% static song.rel_path %}" type="audio/mp3"/>
+            Your browser does not support the audio element.
+        </audio>
+    </div>
+
+    <div class="col-4">
+        <div id="rating-container"
+             hx-get="{% url 'next_rating' %}"
+             hx-trigger="load"
+             hx-target="#rating-container"
+             hx-swap="innerHTML">
+        </div>
+
+
+    </div>
+
+</div>
+
+
+<script type="text/javascript">
+    $(document).on('htmx:afterSwap', function (event) {
+        // Check if the audio element is present in the swapped content
+        if ($(event.target).find('audio').length) {
+            // Get the song ID from a data attribute or other source if necessary
+            const songId = '{{ song.id }}';  // Ensure this is correctly set in your template
+            const albumId = '{{ song.album.id }}';
+            const artistId = '{{ song.artist.id }}';
+            // Example calls for each table
+            scrollToElement('songs-table', 'song', songId);
+            scrollToElement('albums-table', 'album', albumId);
+            scrollToElement('artists-table', 'artist', artistId);
+        }
+    });
+</script>

@@ -2,26 +2,68 @@
 
 {% block content %}
 
-    <div class="row w-100 text-center min-vh-25">
-        <div class="col">
-            <div>
-                <p>player here</p>
-            </div>
-        </div>
+    <div id="player-container">
+        <!-- Player content will be loaded here after ranking-container is loaded -->
     </div>
 
-    <div class="row w-100 text-center">
-        <div class="col">
-            <div>
-                <p>ratings here</p>
-            </div>
-        </div>
+    <div class="row" id="ranking-container"
+         hx-get="{% url 'ranking' %}"
+         hx-trigger="load"
+         hx-target="#ranking-container">
     </div>
 
-    <div class="row w-100 text-center">
-        <div class="col">
-            <h1>library here</h1>
-        </div>
-    </div>
+{% endblock %}
 
+{% block extra_scripts %}
+    <script>
+        let player = null;  // Declare player variable globally
+
+        // Listen for HTMX swap events
+        document.addEventListener('htmx:afterSwap', function (event) {
+            // Check if the swap happened in the #ranking-container
+            if (event.target.id === 'ranking-container') {
+                // Trigger the HTMX request to load player-container once ranking-container is fully loaded
+                htmx.ajax('GET', '{% url "next_song" %}', {
+                    target: '#player-container',
+                    swap: 'innerHTML'
+                });
+            }
+
+            // Check if the swap happened in the #player-container
+            if (event.target.id === 'player-container') {
+                // Ensure the audio element is correctly selected after HTMX swap
+                const audioElement = event.target.querySelector('audio.plyr');
+                if (audioElement) {
+                    // Initialize Plyr
+                    player = new Plyr(audioElement, {autoplay: true});
+
+                    // Attempt to play the audio explicitly
+                    player.play().catch(error => {
+                        console.log('Autoplay failed:', error);
+                    });
+
+                    // Listen for when the song ends
+                    player.on('ended', function () {
+                        // Trigger the HTMX request to get the next song when the current song ends
+                        htmx.ajax('GET', '{% url "next_song" %}', {
+                            target: '#player-container',
+                            swap: 'innerHTML'
+                        });
+                    });
+                }
+            }
+        });
+
+        // Add event listener for spacebar to pause/resume playback
+        document.addEventListener('keydown', function (event) {
+            if (event.code === 'Space' && player) {
+                event.preventDefault();  // Prevent the page from scrolling down
+                if (player.playing) {
+                    player.pause();
+                } else {
+                    player.play();
+                }
+            }
+        });
+    </script>
 {% endblock %}

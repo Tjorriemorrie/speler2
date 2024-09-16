@@ -3840,8 +3840,8 @@
       }
     }
     static dataApiKeydownHandler(event) {
-      // If not an UP | DOWN | ESCAPE key => not a dropdown command
-      // If input/textarea && if key is other than ESCAPE => not a dropdown command
+      // If not an UP | DOWN | ESCAPE key => not a dropdown commands
+      // If input/textarea && if key is other than ESCAPE => not a dropdown commands
 
       const isInput = /input|textarea/i.test(event.target.tagName);
       const isEscapeEvent = event.key === ESCAPE_KEY$2;

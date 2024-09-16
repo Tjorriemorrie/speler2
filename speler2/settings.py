@@ -16,7 +16,6 @@ from environs import Env
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
-MUSIC_DIR = Path.home() / 'Dropbox' / 'Jaco' / 'Music'
 
 env = Env()
 env.read_env()  # read .env file, if it exists
@@ -32,7 +31,12 @@ SECRET_KEY = env('SECRET_KEY')
 DEBUG = env.bool('DEBUG')
 DEVELOPER = env.bool('DEVELOPER', False)
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    '127.0.0.1',
+    'localhost',
+    '10.26.18.138',
+    '192.168.1.100',
+]
 
 
 # Application definition
@@ -174,3 +178,15 @@ LOGGING = {
         },
     },
 }
+
+
+CACHES = {
+    'default': {
+        'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+    }
+}
+
+
+MUSIC_DIR = Path(env('MUSIC_DIR'))
+STATICFILES_DIRS = [MUSIC_DIR]
+USE_MP3 = env.bool('USE_MP3')

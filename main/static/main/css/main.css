@@ -1,3 +1,72 @@
 .min-vh-25 {
     min-height: 25vh;
 }
+
+.min-vh-15 {
+    min-height: 15vh;
+}
+
+
+.small-font-table {
+    font-size: 0.6em;
+}
+
+
+.table-container {
+    flex: 1;
+    overflow: hidden; /* Prevent scrolling of container */
+}
+
+.table-container table {
+    width: 100%;
+    border-collapse: collapse;
+}
+
+.table-container tbody {
+    display: block;
+    height: 46vh;
+    overflow-y: auto;
+}
+
+.table-container thead, .table-container tbody tr {
+    display: table;
+    width: calc(100% - 1em); /* Adjust width if needed */
+    table-layout: fixed;
+}
+
+.table-container thead {
+    width: calc(100% + 1em); /* Adjust width if needed */
+}
+
+
+tr.bg-secondary-subtle {
+    background-color: #f0f0f0 !important; /* Use !important to override table-striped */
+}
+
+
+/* Ensure the card height is minimized */
+.card.compact-card {
+    /*min-height: 150px; !* Set a minimum height for the card *!*/
+    /*max-height: 200px; !* Set a maximum height for the card *!*/
+    /*overflow: hidden; !* Hide overflow content if it exceeds max-height *!*/
+}
+
+/* Adjust padding and margins */
+.card-body {
+    padding: 0.75rem; /* Reduce padding inside the card */
+}
+
+.card-title {
+    font-size: 1rem; /* Reduce font size of the title */
+    margin-bottom: 0.5rem; /* Add margin to the bottom */
+}
+
+.card-subtitle {
+    font-size: 0.875rem; /* Reduce font size of subtitles */
+    margin-bottom: 0.25rem; /* Add margin to the bottom */
+}
+
+/* Optional: Adjust card border radius if needed */
+.card {
+    border-radius: 0.375rem; /* Rounded corners */
+}

@@ -1,0 +1,21 @@
+{% load fmt %}
+<h4>Artists</h4>
+<table class="table">
+    <thead>
+    <tr>
+        <th>#</th>
+        <th>Rating</th>
+        <th>Name</th>
+    </tr>
+    </thead>
+    <tbody>
+    {% for artist in artists %}
+        <tr>
+            <td>{{ forloop.counter }}</td>
+            <td>{{ artist.rating|perc }}</td>
+            <td>{{ artist.name }}</td>
+        </tr>
+    {% endfor %}
+
+    </tbody>
+</table>
