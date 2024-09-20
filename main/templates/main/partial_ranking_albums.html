@@ -1,0 +1,37 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <h5>{{ albums|length }} Albums</h5>
+
+        <table class="table table-striped table-sm">
+            <thead>
+            <tr>
+                <th class="text-muted">#</th>
+                <th colspan="2" class="text-center">Rating</th>
+                <th>Name</th>
+                <th>Artist</th>
+                <th>Tracks</th>
+                <th>Plays</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for album in albums %}
+                <tr id="album-{{ album.id }}" class="{% if album.id == current.album.id %}fw-bold{% endif %}">
+                    <td class="text-muted">{{ forloop.counter }}</td>
+                    <td class="text-end">
+                        <span class="text-muted small">{{ album.count_rated }} @</span>
+                        {{ album.rating|perc }}
+                    </td>
+                    <td>{% iconrank album.rating 5 max_rating min_rating %}</td>
+                    <td>{{ album.name }}</td>
+                    <td>{{ album.artist.name }}</td>
+                    <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
+                    <td>{{ album.count_played }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+</div>

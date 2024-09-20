@@ -2,68 +2,116 @@
 
 {% block content %}
 
-    <div id="player-container">
-        <!-- Player content will be loaded here after ranking-container is loaded -->
+    <div class="row top_height">
+        <div class="row">
+            <div class="col-8 offset-1" id="player-container"
+                 hx-get="{% url "next_song" %}"
+                 hx-trigger="load"
+                 hx-target="#player-container">
+                <!-- Player content will be loaded here after ranking-container is loaded -->
+            </div>
+
+            <div class="col-3 mt-2">
+                <div id="rating-container"
+                     hx-get="{% url 'next_rating' %}"
+                     hx-target="#rating-container"
+                     hx-swap="innerHTML"
+                     hx-trigger="loadNextRating from:body">
+                </div>
+            </div>
+
+        </div>
     </div>
 
-    <div class="row" id="ranking-container"
-         hx-get="{% url 'ranking' %}"
-         hx-trigger="load"
-         hx-target="#ranking-container">
+    <div class="row mb-3">
+        <div class="col">
+
+            <div class="navbar navbar-expand-lg bg-body-tertiary">
+                <div class="container-fluid justify-content-center">
+                    <ul class="navbar-nav w-100">
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/artists/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                Artists
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/albums/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                Albums
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/songs/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                Songs
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/year/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                Year
+                            </a>
+                        </li>
+
+                        <!-- Centered plyr element -->
+                        <li class="nav-item"
+                            style="margin-left: 5%; width: 58%;"
+                        >
+                            <div class="d-flex justify-content-around">
+
+                                <a class="nav-link" style=""
+                                   href="#"
+                                   hx-get="/album/0/"
+                                   hx-target="#main-container"
+                                   hx-swap="innerHTML">
+                                    Current
+                                </a>
+
+                                <audio class="plyr" controls preload="auto">
+                                    Your browser does not support the audio element.
+                                </audio>
+
+                                <a class="nav-link skip-control"
+                                   href="#"
+                                   hx-get="/next-song/"
+                                   hx-target="#player-container"
+                                   hx-swap="innerHTML">
+                                    <i class="bi bi-skip-end-fill"></i>
+                                </a>
+
+                            </div>
+
+
+                        </li>
+
+                    </ul>
+                </div>
+            </div>
+        </div>
     </div>
 
-{% endblock %}
 
-{% block extra_scripts %}
+
+    <div id="main-container">
+        <!-- Main content will be displayed here -->
+    </div>
+
     <script>
-        let player = null;  // Declare player variable globally
-
-        // Listen for HTMX swap events
-        document.addEventListener('htmx:afterSwap', function (event) {
-            // Check if the swap happened in the #ranking-container
-            if (event.target.id === 'ranking-container') {
-                // Trigger the HTMX request to load player-container once ranking-container is fully loaded
-                htmx.ajax('GET', '{% url "next_song" %}', {
-                    target: '#player-container',
-                    swap: 'innerHTML'
-                });
-            }
-
-            // Check if the swap happened in the #player-container
-            if (event.target.id === 'player-container') {
-                // Ensure the audio element is correctly selected after HTMX swap
-                const audioElement = event.target.querySelector('audio.plyr');
-                if (audioElement) {
-                    // Initialize Plyr
-                    player = new Plyr(audioElement, {autoplay: true});
-
-                    // Attempt to play the audio explicitly
-                    player.play().catch(error => {
-                        console.log('Autoplay failed:', error);
-                    });
-
-                    // Listen for when the song ends
-                    player.on('ended', function () {
-                        // Trigger the HTMX request to get the next song when the current song ends
-                        htmx.ajax('GET', '{% url "next_song" %}', {
-                            target: '#player-container',
-                            swap: 'innerHTML'
-                        });
-                    });
-                }
-            }
-        });
-
-        // Add event listener for spacebar to pause/resume playback
-        document.addEventListener('keydown', function (event) {
-            if (event.code === 'Space' && player) {
-                event.preventDefault();  // Prevent the page from scrolling down
-                if (player.playing) {
-                    player.pause();
-                } else {
-                    player.play();
-                }
-            }
+        document.addEventListener('htmx:trigger', function (event) {
+            console.log("HTMX:trigger: ", event.detail);
         });
     </script>
 {% endblock %}

@@ -25,6 +25,8 @@ urlpatterns = [
     path('', views.home_view, name='home'),
     path('next-song/', views.next_song_view, name='next_song'),
     path('next-rating/', views.next_rating_view, name='next_rating'),
-    path('album-art/<int:song_id>', views.album_art_view, name='album_art'),
-    path('ranking', views.ranking_view, name='ranking'),
+    path('album-art/<int:song_id>/', views.album_art_view, name='album_art'),
+    path('album/<int:album_id>/', views.album_view, name='album'),
+    path('ranking/<str:facet>/', views.ranking_view, name='ranking'),
+    path('year/', views.year_view, name='year'),
 ]

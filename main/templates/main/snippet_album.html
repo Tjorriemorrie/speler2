@@ -1,0 +1,16 @@
+{% load fmt %}
+<a class="nav-link"
+   href="#"
+   hx-get="/album/{{ album.id }}/"
+   hx-target="#main-container"
+   hx-swap="innerHTML">
+    <div class="text-center side-album">
+        <p><img class="img-fluid" src="{% url 'album_art' album.songs.first.id %}"
+                alt="{{ album.name }} album art"/>
+        </p>
+        <p class="">{{ album.name }}</p>
+        <p><small>
+            <span class="">#{{ album.rank }}</span> {{ album.year }}
+        </small></p>
+    </div>
+</a>

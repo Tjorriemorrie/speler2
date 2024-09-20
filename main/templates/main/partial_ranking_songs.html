@@ -1,0 +1,44 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <h5>{{ songs|length }} Songs</h5>
+
+        <table class="table table-striped table-sm small-font-table">
+            <thead>
+            <tr>
+                <th class="text-muted">#</th>
+                <th colspan="2" class="text-center">Rating</th>
+                <th>Name</th>
+                <th>Artist</th>
+                <th>Album</th>
+                <th>Plays</th>
+                <th>Last Played</th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for song in songs %}
+                <tr id="song-{{ song.id }}" class="{% if song.id == current.id %}fw-bold{% endif %}">
+                    <td class="text-muted">{{ forloop.counter }}</td>
+                    <td class="text-end">
+                        <span class="text-muted small">{{ song.count_rated }} @</span>
+                        {{ song.rating|perc }}
+                    </td>
+                    <td>{% iconrank song.rating 5 max_rating min_rating %}</td>
+                    <td><span class="text-muted small">{{ song.track_number }}</span>
+                        {{ song.name }}</td>
+                    <td>{{ song.artist.name }}</td>
+                    <td>
+                        <a hx-get="{% url 'album' album_id=song.album.id %}" hx-target="#main-container">
+                                <img class="img-fluid" style="height: 1.6em;" src="{% url 'album_art' song.id %}"/> {{ song.album.name }}<br/>
+                            </a>
+                        </td>
+                    <td>{{ song.count_played }}</td>
+                    <td>{{ song.played_at }}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+</div>

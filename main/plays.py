@@ -1,14 +1,16 @@
 import logging
 import random
-from typing import List, Tuple
+from typing import Tuple
 
+from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
 from django.db.models import ExpressionWrapper, F, FloatField, Max, Sum, Value
 from django.db.models.expressions import Func, RawSQL
 from django.utils import timezone
 
-from main.models import Artist, History, Song
+from main.lastfm_service import scrobble
+from main.models import History, Song
 
 logger = logging.getLogger(__name__)
 
@@ -61,6 +63,9 @@ def set_played(song: Song) -> History:
     artist.played_at = artist.albums.aggregate(Max('played_at'))['played_at__max']
     artist.save()
 
+    if settings.LASTFM_ENABLE:
+        scrobble(history)
+
     return history
 
 
@@ -106,25 +111,3 @@ def get_next_song_priority_values() -> Tuple[int, float]:
     cache.set(cache_key, (max_played, avg_days_last_played), timeout=3600)
 
     return max_played, avg_days_last_played
-
-
-def get_artists_ranked_around(current_artist: Artist) -> List[Artist]:
-    """Return artists around selected artist."""
-    artists = Artist.objects.order_by('-rating')
-
-    # Find the index of the current artist
-    current_artist = artists.get(id=current_artist.id)
-    artist_list = list(artists)
-    current_index = artist_list.index(current_artist)
-
-    # If the current artist is the first in the ranking, return 2 below
-    if current_index == 0:
-        result = artist_list[:3]  # Top 3 artists
-    # If the current artist is the last in the ranking, return 2 above
-    elif current_index == len(artist_list) - 1:
-        result = artist_list[-3:]  # Last 3 artists
-    # Otherwise, return the artist above, the current one, and the artist below
-    else:
-        result = artist_list[current_index - 1 : current_index + 2]
-
-    return result

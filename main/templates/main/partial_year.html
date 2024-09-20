@@ -1,0 +1,31 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <h5>Average ratings by year</h5>
+
+        <table class="table table-striped table-sm">
+            <thead>
+            <tr>
+                <th>Year</th>
+                <th class="text-end">Rating</th>
+                <th></th>
+                <th class="text-end">Albums</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for item in avg_ratings_per_year %}
+                <tr>
+                    <td>{{ item.year }}</td>
+                    <td class="text-end">{{ item.avg_rating|perc }}</td>
+                    <td class="text-start">{% iconrank item.avg_rating 30 max_rating min_rating False %}</td>
+                    <td class="text-end">{{ item.album_count }}</td>
+                    <td class="text-start">{% iconrank item.album_count 30 max_albums 1 False %}</td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+
+    </div>
+</div>

@@ -18,14 +18,16 @@
     <script type="text/javascript" src="{% static 'main/bootstrap-5.3.3-dist/js/bootstrap.js' %}"></script>
     <script type="text/javascript" src="{% static 'main/plyr-3.7.8/plyr.js' %}"></script>
     <script type="text/javascript" src="{% static 'main/htmx-2.0.2/htmx.min.js' %}"></script>
-    <script type="text/javascript" src="{% static 'main/js/scroll.js' %}"></script>
+    <script type="text/javascript" src="{% static 'main/js/player.js' %}"></script>
 </head>
 
 <body>
-<div class="container-fluid min-vh-100 d-flex flex-column">
+
+<div class="container-fluid">
     {% block content %}{% endblock %}
 </div>
-{% block extra_scripts %}{% endblock %}
+
+
 </body>
 
 </html>

@@ -1,4 +1,7 @@
 from django import template
+from django.utils.safestring import mark_safe
+
+from main.models import Song
 
 register = template.Library()
 
@@ -21,3 +24,35 @@ def perc(value: float, rounding: int = 0) -> str:
     except (TypeError, ValueError):
         # Handle invalid input gracefully
         return ''
+
+
+@register.filter
+def rng(end, start=1):
+    """Return range."""
+    return range(start + 1, end + 1)
+
+
+@register.filter
+def trck(song: Song) -> str:
+    """Show track-number."""
+    if song.disc_number > 1 or song.album.total_discs > 1:
+        return f'{song.disc_number}-{song.track_number}'
+    return f'{song.track_number}'
+
+
+@register.simple_tag
+def iconrank(value: int, cnt: int, upper: int, lower: int = None, stars: bool = True) -> str:
+    """Show star ranking."""
+    # If lower is provided, normalize the value between lower and upper
+    if lower is not None:
+        # Ensure value is within the range [lower, upper]
+        value = max(lower, min(value, upper))  # Clamps the value between lower and upper
+        icon_value = ((value - lower) / (upper - lower)) * cnt
+    else:
+        # If lower is not provided, normalize using only upper
+        icon_value = (value / upper) * cnt
+
+    # Generate the stars based on the normalized value
+    icon = '<i class="bi bi-star sub1"></i>' if stars else '<i class="bi bi-square"></i>'
+    stars_html = icon * round(icon_value)
+    return mark_safe(stars_html)  # noqa: S308

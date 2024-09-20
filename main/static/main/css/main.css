@@ -1,5 +1,5 @@
-.min-vh-25 {
-    min-height: 25vh;
+.top_height {
+    height: 22vh;
 }
 
 .min-vh-15 {
@@ -8,13 +8,78 @@
 
 
 .small-font-table {
-    font-size: 0.6em;
+    font-size: 0.7em;
+}
+
+.nav-link {
+    color: lightgray;
+    text-decoration: none;
+    padding: 0.8em 0.5em;
+}
+
+.nav-link:hover {
+    color: darkgray;
+    text-decoration: none;
+}
+
+.navbar {
+    overflow: visible; /* Ensure the controls are visible */
+}
+
+.skip-controls {
+    margin-left: -1em;
+    color: gray;
+}
+
+.plyr {
+    z-index: 1; /* Ensure the audio player is above other elements */
+    width: 100%; /* Make sure it’s responsive */
+    max-width: 100%; /* Prevent it from exceeding its container */
+}
+
+.plyr--audio .plyr__controls {
+    background: none !important;
+}
+
+
+/* album view */
+
+.side-album p {
+    margin: 0;
+    font-size: 0.9rem;
+    color: #6d6d6d;
+}
+
+.side-album img {
+    max-height: 5em;
+    /*margin-top: 0.5em;*/
+}
+
+
+table {
+    color: darkgray;
+}
+
+table a {
+    text-decoration: none;
+    cursor: pointer;
+}
+
+table a:hover {
+    color: black;
+    text-decoration: none;
+}
+
+
+.card-body {
+    padding: 0.5em 0.8em !important;
 }
 
 
 .table-container {
     flex: 1;
     overflow: hidden; /* Prevent scrolling of container */
+    width: 100%; /* Ensure the table takes up full width */
 }
 
 .table-container table {
@@ -69,4 +134,15 @@ tr.bg-secondary-subtle {
 /* Optional: Adjust card border radius if needed */
 .card {
     border-radius: 0.375rem; /* Rounded corners */
+}
+
+
+.sub1 {
+    font-size: 0.8em;
+    color: gray;
+}
+
+.sub {
+    color: lightgray;
+    font-size: 0.6em;
 }

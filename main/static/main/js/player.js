@@ -1,0 +1,85 @@
+$(document).ready(function () {
+    // Initialize the player once
+    const $audioElement = $('audio.plyr');
+    const player = new Plyr($audioElement[0], {autoplay: false});
+
+    // Function to load the next song
+    function loadNextSong() {
+        console.log("loading next song...");
+        htmx.ajax('GET', '/next-song/', {
+            target: '#player-container',
+            swap: 'innerHTML'
+        });
+    }
+
+    // Listen for when the song ends
+    player.on('ended', function () {
+        console.log("song ended");
+        loadNextSong();  // Load next song when the current one ends
+    });
+
+    // Listen for HTMX swap events
+    $(document).on('htmx:afterSwap', function (event) {
+        // Check if the swap happened in the #player-container
+        if ($(event.target).is('#player-container')) {
+            console.log("player-container htmx swapped");
+
+            // Update the song source dynamically
+            let songSrc = $('#songData').data('songsrc');
+            player.source = {
+                type: 'audio',
+                sources: [
+                    {
+                        src: songSrc,
+                        type: 'audio/mp3'  // Adjust this if your audio is in a different format
+                    }
+                ]
+            };
+            console.log("Song source set to", songSrc);
+
+            // Set the volume based on song rating
+            let rating = $('#songData').data('rating');
+            let volume = Math.max(0.1, rating / 2);
+            player.volume = volume;  // Set volume directly
+            console.log("Volume set to", volume, "from rating", rating);
+
+            // Play the audio
+            player.play().catch(function (error) {
+                alert('Enable autoplay in the URL bar.');
+            });
+
+            // Set the page title to the song's name
+            let songTitle = $('#songData').data('songtitle');
+            document.title = songTitle;
+            console.log("Set title to", songTitle);
+
+            // Load the album view on new song
+            console.log("fetching album page...");
+            htmx.ajax('GET', '/album/0/', {
+                target: '#main-container',
+                swap: 'innerHTML'
+            });
+        }
+    });
+
+    // Add event listener for spacebar to pause/resume playback
+    $(document).on('keydown', function (event) {
+        if (event.code === 'Space' && player) {
+            event.preventDefault();  // Prevent the page from scrolling down
+            if (player.playing) {
+                player.pause();
+            } else {
+                player.play();
+            }
+        }
+    });
+
+    // Add event listener for the "n" key to load the next song
+    $(document).on('keydown', function (event) {
+        if (event.key === 'n' || event.code === 'KeyN') {
+            console.log("pressed n");
+            event.preventDefault();  // Prevent any default behavior
+            loadNextSong();  // Load next song when "n" key is pressed
+        }
+    });
+});

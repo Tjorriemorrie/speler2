@@ -163,8 +163,9 @@ LOGGING = {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'stream': sys.stdout,
             'formatter': 'compact',
+            # Ensure that sys.stdout is re-opened with utf-8 encoding
+            'stream': sys.stdout,
         },
     },
     'root': {
@@ -174,6 +175,11 @@ LOGGING = {
     },
     'loggers': {
         'django': {
+            'propagate': False,
+        },
+        'pylast': {
+            'handlers': ['console'],
+            'level': 'CRITICAL',  # Only log CRITICAL messages
             'propagate': False,
         },
     },
@@ -188,5 +194,16 @@ CACHES = {
 
 
 MUSIC_DIR = Path(env('MUSIC_DIR'))
-STATICFILES_DIRS = [MUSIC_DIR]
 USE_MP3 = env.bool('USE_MP3')
+ALBUM_ART_DIR = BASE_DIR / 'album_art'
+
+STATICFILES_DIRS = [
+    MUSIC_DIR,
+    ALBUM_ART_DIR,
+]
+
+
+LASTFM_API_KEY = env('LASTFM_API_KEY')
+LASTFM_SECRET = env('LASTFM_SECRET')
+LASTFM_ENABLE = bool(LASTFM_API_KEY and LASTFM_SECRET)
+LASTFM_SESSION_FILE = BASE_DIR / 'lastfm.session'

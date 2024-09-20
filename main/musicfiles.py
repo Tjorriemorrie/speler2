@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 def scan_directory(*args, **kwargs):
     """Scan directory."""
+    validate_songs()
+
     logger.info(f'Scanning {settings.MUSIC_DIR}')
 
     patterns = []
@@ -56,8 +58,6 @@ def scan_directory(*args, **kwargs):
         )
         artist.save()
 
-    validate_songs()
-
 
 def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
     """Add new Artist, Album and Song after parsing ID3 metadata."""
@@ -82,7 +82,6 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
             'name': metadata['album_name'],
             'year': metadata['year'],
             'total_tracks': metadata['total_tracks'],
-            'disc_number': metadata['disc_number'],
             'total_discs': metadata['total_discs'],
         },
     )
@@ -95,6 +94,7 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
         rel_path=rel_path,
         slug=song_slug,
         name=metadata['song_title'],
+        disc_number=metadata['disc_number'],
         track_number=metadata['track_number'],
     )
     logger.info(f'Created {song}')

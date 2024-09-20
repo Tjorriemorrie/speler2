@@ -3,6 +3,7 @@ from datetime import timedelta
 from itertools import combinations
 from typing import List, Optional, Set
 
+from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
@@ -13,20 +14,22 @@ logger = logging.getLogger(__name__)
 
 def get_recent_songs_from_history() -> Set[Song]:
     """Get recent histories of last half hour, limited to 10."""
-    hour_ago = timezone.now() - timedelta(minutes=30)
-    histories = History.objects.prefetch_related('song').filter(played_at__gte=hour_ago).all()
+    time_ago = timezone.now() - timedelta(minutes=30)
+    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:3]
     songs = set([h.song for h in histories])
-    return songs[:5]
+    return songs
 
 
-def get_match() -> Optional[List[Song]]:
+def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
     songs = get_recent_songs_from_history()
+    songs.add(current_song)
     song_ids = [s.id for s in songs]
+    logger.info(f'Searching {song_ids} for a match...')
 
     # Filter ratings for the relevant song pairs
     ratings = Rating.objects.filter(
-        Q(winner_id__in=song_ids) & Q(loser_id__in=song_ids)
+        Q(winner_id__in=song_ids) | Q(loser_id__in=song_ids)
     ).values_list('winner_id', 'loser_id')
 
     # Convert ratings to a set for faster lookup
@@ -81,3 +84,20 @@ def set_match_result(winner_id: int, loser_ids: List[int]):
         artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
         artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
         artist.save()
+
+
+def get_median_rating():
+    """Get median rating."""
+    with connection.cursor() as cursor:
+        cursor.execute("""
+            SELECT AVG(rating)
+            FROM (
+                SELECT rating
+                FROM your_app_album
+                ORDER BY rating
+                LIMIT 2
+                OFFSET (SELECT (COUNT(*) - 1) / 2 FROM your_app_album)
+            );
+        """)
+        result = cursor.fetchone()
+    return result[0] if result else None
