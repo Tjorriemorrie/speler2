@@ -28,8 +28,13 @@ def get_next_song() -> Song:
     # Calculate time since played using raw SQL
     time_since_played_expr = RawSQL("(julianday('now') - julianday(main_song.played_at))", [])
 
+    query = Song.objects
+    # filter on facet
+    if filter_facet := cache.get('filter_facet'):
+        logger.info(f'Filtering on {filter_facet}')
+        query = query.filter(**filter_facet)
     # Annotate priority
-    songs_with_priority = Song.objects.annotate(
+    songs_with_priority = query.annotate(
         time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
         priority=(
             F('rating')
@@ -40,6 +45,8 @@ def get_next_song() -> Song:
 
     # Get the song with the highest priority
     next_song = songs_with_priority.first()
+    if not next_song:
+        raise ValueError('Expected to get a song, but found nothing')
 
     logger.info(f'Next Song: {next_song.priority:.2f} {next_song}')
     logger.info(f'Next Song: rating {next_song.rating:.2f}')

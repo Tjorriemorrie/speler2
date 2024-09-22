@@ -4,7 +4,7 @@
 
         <div class="d-flex justify-content-between align-items-center">
             <h5>
-                {{ objs.paginator.count }} objs
+                {{ objs.paginator.count }} albums
             </h5>
             <div class="text-end">
                 {% include 'main/snippet_pagination.html' with objs=objs %}
@@ -14,12 +14,13 @@
         <table class="table table-striped table-sm">
             <thead>
             <tr>
-                <th class="text-muted">#</th>
+                <th class="text-muted">Rank</th>
                 <th colspan="2" class="text-center">Rating</th>
-                <th>Name</th>
+                <th style="padding-left: 2em;">Name</th>
                 <th>Artist</th>
                 <th>Tracks</th>
                 <th>Plays</th>
+                <th>Last Played</th>
             </tr>
             </thead>
             <tbody>
@@ -29,18 +30,26 @@
                     <td class="text-muted">{{ album.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ album.count_rated }} @</span>
-                        {{ album.rating|perc }}
+                        {{ album.rating|perc:1 }}
                     </td>
                     <td>{% iconrank album.rating 5 max_rating min_rating %}</td>
                     <td>
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=album_{{ album.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
                         <a hx-get="{% url 'album' album_id=album.id %}" hx-target="#main-container">
-                            <img class="img-fluid" style="height: 2em;"
+                            <img class="img-fluid" style="height: 1.7em;"
                                  src="{% url 'album_art' album.songs.first.id %}"/> {{ album.name }}<br/>
                         </a>
                     </td>
                     <td>{{ album.artist.name }}</td>
                     <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
                     <td>{{ album.count_played }}</td>
+                    <td>{{ album.played_at }}</td>
                 </tr>
             {% endfor %}
             </tbody>

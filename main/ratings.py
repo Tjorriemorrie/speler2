@@ -39,11 +39,14 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
         rated_pairs.add((loser, winner))  # Add reverse pair for bidirectional check
 
     # Find combinations of songs that have no ratings between them
-    for a, b, c in combinations(songs, 3):
-        comb_ids = {a.id, b.id, c.id}
+    for b, c in combinations(songs, 2):
+        # Ensure current_song is not one of b or c
+        if current_song in (b, c):
+            continue
+        comb_ids = {current_song.id, b.id, c.id}
         # Check if any pair in comb_ids has been rated
         if not any((winner in comb_ids and loser in comb_ids) for winner, loser in rated_pairs):
-            match = [a, b, c]
+            match = [current_song, b, c]
             logger.info(f'Found match: {match}')
             return match
     logger.info(f'Could not find any match for {song_ids}')

@@ -14,9 +14,22 @@
          data-songtitle="{{ song.name }} | {{ song.artist.name }}"
          data-songsrc="{% static song.rel_path %}"
     >
-        <h2><span class="text-muted small">{{ song|trck }}</span> {{ song.name }}</h2>
-        <h3>{{ song.artist.name }}</h3>
-        <h5><span class="text-muted small">{{ song.album.year }}</span> {{ song.album.name }}</h5>
+        <h2>{{ song.name }}</h2>
+        <h3><em>{{ song.artist.name }}</em></h3>
+        <h5>{{ song.album.name }}</h5>
+        {% if filter_value %}
+            <br/>
+            <p style="color: #666">
+                Only playing: {{ filter_value.name }}
+                <a class="play-icon"
+                   href="#"
+                   hx-get="/next-song/?remove_facet=1"
+                   hx-target="#player-container"
+                   hx-swap="innerHTML">
+                    &nbsp;<i class="bi bi-trash" style="font-size: 0.8em"></i>
+                </a>
+            </p>
+        {% endif %}
     </div>
 
 </div>

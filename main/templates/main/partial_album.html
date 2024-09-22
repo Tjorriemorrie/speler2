@@ -7,18 +7,22 @@
         {% endfor %}
     </div>
 
-    <div class="col-4 d-flex justify-content-center">
+    <div class="col-4 d-flex justify-content-center" style="z-index: 1;">
         <div class="d-flex align-items-start">
             <img class="img-fluid" src="{% url 'album_art' album.songs.first.id %}"
                  style="max-height: 6em; padding-right: 1em;"
                  alt="{{ album.name }} album art"/>
             <div class="d-block">
-                <h6 class="text-muted">
-                    <em><span class="">#{{ album.artist.rank }}</span> {{ album.artist.name }}</em>
-                </h6>
-                <h4>{{ album.name }}</h4>
-                <h6>{{ album.year }} #<span
-                        class="small text-muted"><em>{{ album.rank }}</em></span></h6>
+                <div class="album-meta">
+                    <h6><em><span>#{{ album.artist.rank }}</span></em></h6>
+                    <h5><span>#{{ album.rank }}</span></h5>
+                    <h6>&nbsp;</h6>
+                </div>
+                <div class="album-details">
+                    <h6><em>{{ album.artist.name }}</em></h6>
+                    <h5>{{ album.name }}</h5>
+                    <h6><small>{{ album.year }}</small></h6>
+                </div>
             </div>
         </div>
     </div>

@@ -43,9 +43,12 @@ $(document).ready(function () {
             console.log("Song source set to", songSrc);
 
             // Set the volume based on song rating
+            // Scale rating from [0, 1] to [0.3, 0.7]
             let rating = $('#songData').data('rating');
-            let volume = Math.max(0.1, rating / 2);
-            player.volume = volume;  // Set volume directly
+            const newMax = 0.7;
+            const newMin = 0.1;
+            let volume = (((rating - 0) * (newMax - newMin)) / (1 - 0)) + newMin
+            player.volume = volume;
             console.log("Volume set to", volume, "from rating", rating);
 
             // Play the audio

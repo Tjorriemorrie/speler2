@@ -4,7 +4,7 @@
 
         <div class="d-flex justify-content-between align-items-center">
             <h5>
-                {{ objs.paginator.count }} objs
+                {{ objs.paginator.count }} albums
             </h5>
             <div class="text-end">
                 {% include 'main/snippet_pagination.html' with objs=objs facet=facet %}
@@ -14,9 +14,9 @@
         <table class="table table-striped table-sm">
             <thead>
             <tr>
-                <th class="text-muted">#</th>
+                <th class="text-muted">Rank</th>
                 <th colspan="2" class="text-center">Rating</th>
-                <th>Name</th>
+                <th style="padding-left: 2em;">Name</th>
                 <th>Albums</th>
                 <th>Plays</th>
                 <th>Last Played</th>
@@ -29,23 +29,29 @@
                     <td class="text-muted">{{ artist.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ artist.count_rated }} @</span>
-                        {{ artist.rating|perc }}
+                        {{ artist.rating|perc:1 }}
                     </td>
                     <td>{% iconrank artist.rating 5 max_rating min_rating %}</td>
-                    <td>{{ artist.name }}</td>
+                    <td>
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=artist_{{ artist.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
+                        {{ artist.name }}
+                    </td>
                     <td>
                         {% for album in artist.albums.all %}
                             <a hx-get="{% url 'album' album_id=album.id %}"
                                hx-target="#main-container">
-                                <img class="img-fluid" title=" {{ album.name }}" style="height: 2em;"
+                                <img class="img-fluid" title=" {{ album.name }}" style="height: 1.7em;"
                                      src="{% url 'album_art' album.songs.first.id %}"/>
                             </a>
                         {% endfor %}
                     </td>
-                    <td>
-                        {{ artist.count_played }} <span
-                            class="text-muted small">({{ artist.played_at }})</span>
-                    </td>
+                    <td>{{ artist.count_played }}</td>
                     <td>{{ artist.played_at }}</td>
                 </tr>
             {% endfor %}

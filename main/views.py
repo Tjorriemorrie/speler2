@@ -2,6 +2,7 @@ import logging
 from pathlib import Path
 
 from django.conf import settings
+from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Avg, Count
@@ -36,12 +37,18 @@ def next_song_view(request: WSGIRequest):
 
     next_song = None
 
-    # request_song_id = request
+    # demands and facet filters
+    if request.GET.get('remove_facet'):
+        cache.delete('filter_facet')
     if demand := request.GET.get('demand'):
         logger.info(f'Demand received: {demand}')
         dem_type, dem_id = demand.split('_')
         if dem_type == 'song':
             next_song = Song.objects.get(id=dem_id)
+        else:
+            facet_class = globals().get(dem_type.title())
+            facet_ins = get_object_or_404(facet_class, id=dem_id)
+            cache.set('filter_facet', {dem_type: facet_ins}, timeout=None)
 
     # normal priority queue
     if not next_song:
@@ -55,8 +62,18 @@ def next_song_view(request: WSGIRequest):
     # store for matches and history
     request.session['song_id'] = next_song.id
 
+    # Check if filter_facet is not None and has at least one item
+    if filter_facet := cache.get('filter_facet'):
+        filter_value = next(iter(filter_facet.values()))  # Get the first value
+    else:
+        filter_value = None
+    ctx = {
+        'song': next_song,
+        'filter_value': filter_value,
+    }
+    response = render(request, 'main/partial_song_player.html', ctx)
+
     # Set the HX-Trigger header to load matches
-    response = render(request, 'main/partial_song_player.html', {'song': next_song})
     response['HX-Trigger'] = 'loadNextRating'
     return response
 
@@ -151,7 +168,7 @@ def ranking_view(request, facet):
     query = cls.objects
     if prefetch:
         query = query.prefetch_related(prefetch)
-    objs = query.order_by('-count_played', '-count_rated', 'rating').all()
+    objs = query.order_by('-rating', '-count_played', '-count_rated').all()
 
     # Add pagination logic
     paginator = Paginator(objs, 60)  # 10 items per page

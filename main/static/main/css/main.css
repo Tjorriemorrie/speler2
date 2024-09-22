@@ -151,8 +151,25 @@ tr.bg-secondary-subtle {
 a.play-icon {
     color: #999;
     padding-right: 0.5em;
+    text-decoration: none;
 }
 
 .play-icon:hover {
     color: #333;
+}
+
+
+.album-meta {
+    display: inline-block;
+    text-align: right;
+    margin-right: 0.2em;
+}
+
+.album-meta span {
+    font-size: 0.7em;
+    color: #888;
+}
+
+.album-details {
+    display: inline-block;
 }

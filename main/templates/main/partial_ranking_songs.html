@@ -4,7 +4,7 @@
 
         <div class="d-flex justify-content-between align-items-center">
             <h5>
-                {{ objs.paginator.count }} objs
+                {{ objs.paginator.count }} songs
             </h5>
             <div class="text-end">
                 {% include 'main/snippet_pagination.html' with objs=objs %}
@@ -14,9 +14,9 @@
         <table class="table table-striped table-sm small-font-table">
             <thead>
             <tr>
-                <th class="text-muted">#</th>
+                <th class="text-muted">Rank</th>
                 <th colspan="2" class="text-center">Rating</th>
-                <th>Name</th>
+                <th style="padding-left: 2em;">Name</th>
                 <th>Artist</th>
                 <th>Album</th>
                 <th>Plays</th>
@@ -29,11 +29,20 @@
                     <td class="text-muted">{{ song.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ song.count_rated }} @</span>
-                        {{ song.rating|perc }}
+                        {{ song.rating|perc:1 }}
                     </td>
                     <td>{% iconrank song.rating 5 max_rating min_rating %}</td>
-                    <td><span class="text-muted small">{{ song.track_number }}</span>
-                        {{ song.name }}</td>
+                    <td>
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=song_{{ song.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
+                        <span class="text-muted small">{{ song.track_number }}</span>
+                        {{ song.name }}
+                    </td>
                     <td>{{ song.artist.name }}</td>
                     <td>
                         <a hx-get="{% url 'album' album_id=song.album.id %}" hx-target="#main-container">
