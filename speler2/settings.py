@@ -154,7 +154,7 @@ LOGGING = {
         'file': {
             'level': env('LOG_LEVEL'),
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': BASE_DIR / 'logs' / 'wsgi.log',
+            'filename': BASE_DIR / '.logs' / 'wsgi.log',
             'when': 'midnight',
             'backupCount': 30,
             'delay': True,
@@ -195,11 +195,13 @@ CACHES = {
 
 MUSIC_DIR = Path(env('MUSIC_DIR'))
 USE_MP3 = env.bool('USE_MP3')
-ALBUM_ART_DIR = BASE_DIR / 'album_art'
+ALBUMS_DIR = BASE_DIR / '.albums'
+LYRICS_DIR = BASE_DIR / '.lyrics'
 
 STATICFILES_DIRS = [
     MUSIC_DIR,
-    ALBUM_ART_DIR,
+    ALBUMS_DIR,
+    LYRICS_DIR,
 ]
 
 

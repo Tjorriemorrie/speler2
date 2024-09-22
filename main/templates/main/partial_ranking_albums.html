@@ -51,7 +51,7 @@
                     <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
                     <td>{{ album.total_length|dur }}</td>
                     <td>{{ album.count_played }}</td>
-                    <td>{{ album.played_at }}</td>
+                    <td>{{ album.played_at|days_ago }}</td>
                 </tr>
             {% endfor %}
             </tbody>

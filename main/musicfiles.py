@@ -3,6 +3,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.db import transaction
+from django.db.models import Sum
 from django.utils.text import slugify
 from mutagen import id3, mp3, mp4
 
@@ -46,12 +47,14 @@ def scan_directory(*args, **kwargs):
     artists = set()
     for album in albums:
         album.count_songs = album.songs.count()
+        album.total_length = album.songs.aggregate(Sum('track_length'))['track_length__sum']
         album.save()
         artists.add(album.artist)
         logger.info(f'Updated album {album.name}: count_songs={album.count_songs}')
     for artist in artists:
         artist.count_albums = artist.albums.count()
         artist.count_songs = artist.songs.count()
+        artist.total_length = artist.albums.aggregate(Sum('total_length'))['total_length__sum']
         logger.info(
             f'Updated artist {artist.name}: '
             f'count_albums={artist.count_albums} count_songs={artist.count_songs}'
@@ -96,6 +99,7 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
         name=metadata['song_title'],
         disc_number=metadata['disc_number'],
         track_number=metadata['track_number'],
+        track_length=metadata['track_length'],
     )
     logger.info(f'Created {song}')
 

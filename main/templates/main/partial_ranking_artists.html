@@ -54,7 +54,7 @@
                     </td>
                     <td>{{ artist.total_length|dur }}</td>
                     <td>{{ artist.count_played }}</td>
-                    <td>{{ artist.played_at }}</td>
+                    <td>{{ artist.played_at|days_ago }}</td>
                 </tr>
             {% endfor %}
 

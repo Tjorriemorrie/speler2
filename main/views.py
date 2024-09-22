@@ -10,6 +10,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
 
+from main.lyrics import get_lyrics_chartlyrics
 from main.models import Album, Artist, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, set_played
@@ -97,7 +98,7 @@ def album_art_view(request, song_id):
     album = song.album
 
     # Define path to album art in the static directory
-    album_art_path = settings.ALBUM_ART_DIR / f'{album.id}-{album.slug}.jpg'
+    album_art_path = settings.ALBUMS_DIR / f'{album.artist.slug}-{album.slug}-{album.id}.jpg'
 
     # Check if album art already exists in the static directory
     if album_art_path.exists():
@@ -220,3 +221,12 @@ def year_view(request):
             'min_rating': min_rating,
         },
     )
+
+
+def lyrics_view(request, song_id: int):
+    """Show lyric."""
+    song = get_object_or_404(Song, id=song_id)
+    lyrics = get_lyrics_chartlyrics(song)
+    response = render(request, 'main/partial_lyrics.html', {'lyrics': lyrics})
+    patch_cache_control(response, public=True, max_age=86400)
+    return response

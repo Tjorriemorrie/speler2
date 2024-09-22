@@ -29,4 +29,5 @@ urlpatterns = [
     path('album/<int:album_id>/', views.album_view, name='album'),
     path('ranking/<str:facet>/', views.ranking_view, name='ranking'),
     path('year/', views.year_view, name='year'),
+    path('lyrics/<int:song_id>/', views.lyrics_view, name='lyric_txt'),
 ]

@@ -48,7 +48,13 @@ def get_next_song() -> Song:
     if not next_song:
         raise ValueError('Expected to get a song, but found nothing')
 
-    logger.info(f'Next Song: {next_song.priority:.2f} {next_song}')
+    logger.info(f'Next Song: {next_song}')
+    calculated_priority = (
+        next_song.rating
+        - (next_song.count_played / max_played)
+        + (next_song.time_since_played / avg_days_last_played)
+    )
+    logger.info(f'Next Song: priority {next_song.priority:.2f} vs calc {calculated_priority:.2f}')
     logger.info(f'Next Song: rating {next_song.rating:.2f}')
     playd = next_song.count_played / max_played
     logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played})')

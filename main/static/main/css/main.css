@@ -173,3 +173,11 @@ a.play-icon {
 .album-details {
     display: inline-block;
 }
+
+.box-lyrics {
+    text-align: left;
+    box-shadow: inset -10px 0px 15px -5px rgba(0, 0, 0, 0.2);
+    line-height: 1em;
+    font-size: 0.7em;
+    /*border-right: 1px solid #999;*/
+}

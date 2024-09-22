@@ -55,7 +55,7 @@
                     </td>
                     <td>{{ song.track_length|dur }}</td>
                     <td>{{ song.count_played }}</td>
-                    <td>{{ song.played_at }}</td>
+                    <td>{{ song.played_at|days_ago }}</td>
                 </tr>
             {% endfor %}
             </tbody>

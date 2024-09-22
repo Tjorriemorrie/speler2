@@ -1,4 +1,7 @@
+from datetime import datetime, timedelta
+
 from django import template
+from django.utils import timezone
 from django.utils.safestring import mark_safe
 
 from main.models import Song
@@ -71,3 +74,25 @@ def dur(duration: float) -> str:
         return f'{hours}:{minutes:02}:{seconds:02}'  # hh:mm:ss
     else:
         return f'{minutes}:{seconds:02}'  # mm:ss
+
+
+@register.filter
+def days_ago(value):
+    """Calculate how many days ago a given date or datetime was."""
+    if not isinstance(value, (datetime, timedelta)):
+        return ''
+
+    now = timezone.now()
+    delta = now - value
+
+    # Format the date as (d MMM)
+    day = value.day  # Get the day without leading zero
+    month = value.strftime('%b')  # Get the abbreviated month
+    date_str = f'({day} {month})'  # Combine day and month
+
+    if delta.days < 1:
+        return f'Today {date_str}'
+    elif delta.days == 1:
+        return f'1 day ago {date_str}'
+    else:
+        return f'{delta.days} days ago {date_str}'
