@@ -146,3 +146,13 @@ tr.bg-secondary-subtle {
     color: lightgray;
     font-size: 0.6em;
 }
+
+
+a.play-icon {
+    color: #999;
+    padding-right: 0.5em;
+}
+
+.play-icon:hover {
+    color: #333;
+}

@@ -20,6 +20,11 @@ $(document).ready(function () {
 
     // Listen for HTMX swap events
     $(document).on('htmx:afterSwap', function (event) {
+        // Only scroll to top when pagination links are clicked (or similar elements)
+        if ($(event.detail.target).is('#main-container')) {
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        }
+
         // Check if the swap happened in the #player-container
         if ($(event.target).is('#player-container')) {
             console.log("player-container htmx swapped");

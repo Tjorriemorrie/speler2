@@ -11,7 +11,7 @@
 
     <div class="col-9" id="songData"
          data-rating="{{ song.rating }}"
-         data-songtitle="{{ song.name|escapejs }} | {{ song.artist.name|escapejs }}"
+         data-songtitle="{{ song.name }} | {{ song.artist.name }}"
          data-songsrc="{% static song.rel_path %}"
     >
         <h2><span class="text-muted small">{{ song|trck }}</span> {{ song.name }}</h2>

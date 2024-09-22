@@ -2,7 +2,14 @@
 <div class="row">
     <div class="col">
 
-        <h5>{{ albums|length }} Albums</h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5>
+                {{ objs.paginator.count }} objs
+            </h5>
+            <div class="text-end">
+                {% include 'main/snippet_pagination.html' with objs=objs %}
+            </div>
+        </div>
 
         <table class="table table-striped table-sm">
             <thead>
@@ -16,15 +23,21 @@
             </tr>
             </thead>
             <tbody>
-            {% for album in albums %}
-                <tr id="album-{{ album.id }}" class="{% if album.id == current.album.id %}fw-bold{% endif %}">
-                    <td class="text-muted">{{ forloop.counter }}</td>
+            {% for album in objs %}
+                <tr id="album-{{ album.id }}"
+                    class="{% if album.id == current.album.id %}fw-bold{% endif %}">
+                    <td class="text-muted">{{ album.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ album.count_rated }} @</span>
                         {{ album.rating|perc }}
                     </td>
                     <td>{% iconrank album.rating 5 max_rating min_rating %}</td>
-                    <td>{{ album.name }}</td>
+                    <td>
+                        <a hx-get="{% url 'album' album_id=album.id %}" hx-target="#main-container">
+                            <img class="img-fluid" style="height: 2em;"
+                                 src="{% url 'album_art' album.songs.first.id %}"/> {{ album.name }}<br/>
+                        </a>
+                    </td>
                     <td>{{ album.artist.name }}</td>
                     <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
                     <td>{{ album.count_played }}</td>
@@ -32,6 +45,10 @@
             {% endfor %}
             </tbody>
         </table>
+
+        <div class="text-end">
+            {% include 'main/snippet_pagination.html' with objs=objs %}
+        </div>
 
     </div>
 </div>

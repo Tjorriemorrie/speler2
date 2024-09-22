@@ -39,10 +39,17 @@ def get_next_song() -> Song:
     ).order_by('-priority')
 
     # Get the song with the highest priority
-    highest_priority_song = songs_with_priority.first()
+    next_song = songs_with_priority.first()
 
-    logger.info('Highest Priority Song: {}'.format(highest_priority_song))
-    return highest_priority_song
+    logger.info(f'Next Song: {next_song.priority:.2f} {next_song}')
+    logger.info(f'Next Song: rating {next_song.rating:.2f}')
+    playd = next_song.count_played / max_played
+    logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played})')
+    tspd = next_song.time_since_played / avg_days_last_played
+    logger.info(
+        f'Next Song: days {tspd:.2f} ({next_song.time_since_played} / {avg_days_last_played})'
+    )
+    return next_song
 
 
 def set_played(song: Song) -> History:
@@ -97,17 +104,19 @@ def get_next_song_priority_values() -> Tuple[int, float]:
     with connection.cursor() as cursor:
         cursor.execute(raw_sql)
         avg_julian_day, current_julian_day = cursor.fetchone()
+        logger.info(f'avg julian: {avg_julian_day}')
+        logger.info(f'cur julian: {current_julian_day}')
 
     if avg_julian_day is None:
         avg_days_last_played = 1  # Default value if no data
     else:
         # Calculate days since average Julian Day
-        avg_days_last_played = int(round(current_julian_day - avg_julian_day))
+        avg_days_last_played = current_julian_day - avg_julian_day
 
         # Ensure the value is at least 1 to avoid division by zero
         avg_days_last_played = max(avg_days_last_played, 1)
 
-    # Cache the values for 1 hour (3600 seconds)
-    cache.set(cache_key, (max_played, avg_days_last_played), timeout=3600)
+    # Cache the values for 2 hour (3600 seconds * 2)
+    cache.set(cache_key, (max_played, avg_days_last_played), timeout=7200)
 
     return max_played, avg_days_last_played

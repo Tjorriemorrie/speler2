@@ -16,8 +16,9 @@
                 <h6 class="text-muted">
                     <em><span class="">#{{ album.artist.rank }}</span> {{ album.artist.name }}</em>
                 </h6>
-                <h4>#<span class="small text-muted"><em>{{ album.rank }}</em></span> {{ album.name }}</h4>
-                <h6>{{ album.year }}</h6>
+                <h4>{{ album.name }}</h4>
+                <h6>{{ album.year }} #<span
+                        class="small text-muted"><em>{{ album.rank }}</em></span></h6>
             </div>
         </div>
     </div>
@@ -32,12 +33,13 @@
 
 <div class="row">
     <div class="col">
-        <table class="table table-striped table-sm">
+        <table class="table table-striped table-sm" style="font-size: 0.8em;">
             <thead>
             <tr>
-                <th>Track</th>
+                <th>Rank</th>
                 <th colspan="2" class="text-center">Rating</th>
-                <th>Title</th>
+                <th>Track</th>
+                <th style="padding-left: 2em;">Title</th>
                 <th>Plays</th>
                 <th>Last Played</th>
             </tr>
@@ -45,13 +47,23 @@
             <tbody>
             {% for song in songs %}
                 <tr class="{% if song.id == current_song_id %}fw-bold{% endif %}">
-                    <td>{{ song|trck }}</td>
+                    <td>{{ song.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ song.count_rated }} @</span>
                         {{ song.rating|perc }}
                     </td>
                     <td>{% iconrank song.rating 5 1 0 %}</td>
-                    <td>{{ song.name }}</td>
+                    <td>{{ song|trck }}</td>
+                    <td>
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=song_{{ song.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
+                        {{ song.name }}
+                    </td>
                     <td>{{ song.count_played }}</td>
                     <td>{{ song.played_at }}</td>
                 </tr>

@@ -156,7 +156,7 @@ def validate_songs():
 
     with transaction.atomic():
         for song in songs:
-            if not (settings.MUSIC_DIR / song.rel_path).is_file():
+            if not song.file_exists():
                 logger.info(f'Removing bad song {song}')
                 song.delete()
 

@@ -1,7 +1,8 @@
 {% load static %}
 {% if match %}
     {% for song in match %}
-        <a hx-get="{% url 'next_rating' %}?winner_id={{ song.id }}"
+        <a class="text-reset text-decoration-none" href="#"
+           hx-get="{% url 'next_rating' %}?winner_id={{ song.id }}"
            hx-target="#rating-container"
            hx-swap="innerHTML">
             <div class="card compact-card">

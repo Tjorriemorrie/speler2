@@ -2,7 +2,14 @@
 <div class="row">
     <div class="col">
 
-        <h5>{{ artists|length }} Artists</h5>
+        <div class="d-flex justify-content-between align-items-center">
+            <h5>
+                {{ objs.paginator.count }} objs
+            </h5>
+            <div class="text-end">
+                {% include 'main/snippet_pagination.html' with objs=objs facet=facet %}
+            </div>
+        </div>
 
         <table class="table table-striped table-sm">
             <thead>
@@ -16,9 +23,10 @@
             </tr>
             </thead>
             <tbody>
-            {% for artist in artists %}
-                <tr id="artist-{{ artist.id }}" class="{% if artist.id == current.artist.id %}fw-bold{% endif %}">
-                    <td class="text-muted">{{ forloop.counter }}</td>
+            {% for artist in objs %}
+                <tr id="artist-{{ artist.id }}"
+                    class="{% if artist.id == current.artist.id %}fw-bold{% endif %}">
+                    <td class="text-muted">{{ artist.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ artist.count_rated }} @</span>
                         {{ artist.rating|perc }}
@@ -27,13 +35,16 @@
                     <td>{{ artist.name }}</td>
                     <td>
                         {% for album in artist.albums.all %}
-                            <a hx-get="{% url 'album' album_id=album.id %}" hx-target="#main-container">
-                                <img class="img-fluid" style="height: 2em;" src="{% url 'album_art' album.songs.first.id %}"/> {{ album.name }}<br/>
+                            <a hx-get="{% url 'album' album_id=album.id %}"
+                               hx-target="#main-container">
+                                <img class="img-fluid" title=" {{ album.name }}" style="height: 2em;"
+                                     src="{% url 'album_art' album.songs.first.id %}"/>
                             </a>
                         {% endfor %}
                     </td>
                     <td>
-                        {{ artist.count_played }} <span class="text-muted small">({{ artist.played_at }})</span>
+                        {{ artist.count_played }} <span
+                            class="text-muted small">({{ artist.played_at }})</span>
                     </td>
                     <td>{{ artist.played_at }}</td>
                 </tr>
@@ -41,6 +52,10 @@
 
             </tbody>
         </table>
+
+        <div class="text-end">
+            {% include 'main/snippet_pagination.html' with objs=objs facet=facet %}
+        </div>
 
     </div>
 </div>

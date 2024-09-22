@@ -3,13 +3,14 @@ from pathlib import Path
 
 from django.conf import settings
 from django.core.handlers.wsgi import WSGIRequest
+from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.db.models import Avg, Count
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
 
 from main.models import Album, Artist, Song
-from main.musicfiles import get_album_art
+from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, set_played
 from main.ratings import get_match, set_match_result
 
@@ -33,11 +34,29 @@ def next_song_view(request: WSGIRequest):
             logger.warning(f'Looked to play {last_song_id} but not found!')
             pass
 
-    next_song = get_next_song()
+    next_song = None
+
+    # request_song_id = request
+    if demand := request.GET.get('demand'):
+        logger.info(f'Demand received: {demand}')
+        dem_type, dem_id = demand.split('_')
+        if dem_type == 'song':
+            next_song = Song.objects.get(id=dem_id)
+
+    # normal priority queue
+    if not next_song:
+        next_song = get_next_song()
+
+    # check audio exists
+    if not next_song.file_exists():
+        validate_songs()
+        next_song = get_next_song()
+
+    # store for matches and history
     request.session['song_id'] = next_song.id
 
+    # Set the HX-Trigger header to load matches
     response = render(request, 'main/partial_song_player.html', {'song': next_song})
-    # Set the HX-Trigger header
     response['HX-Trigger'] = 'loadNextRating'
     return response
 
@@ -59,16 +78,13 @@ def album_art_view(request, song_id):
     """Return album art from static directory if exists, otherwise extract from ID3."""
     song = get_object_or_404(Song, id=song_id)
     album = song.album
-    logger.info(f'Getting album art for {album}')
 
     # Define path to album art in the static directory
     album_art_path = settings.ALBUM_ART_DIR / f'{album.id}-{album.slug}.jpg'
-    logger.info(f'Album art path: {album_art_path}')
 
     # Check if album art already exists in the static directory
     if album_art_path.exists():
         with Path.open(album_art_path, 'rb') as art_file:
-            logger.info(f'album art already found, returning {album_art_path}')
             response = HttpResponse(art_file.read(), content_type='image/jpeg')
             # Add cache headers to the response (e.g., cache for 1 day)
             patch_cache_control(response, public=True, max_age=86400)  # 86400 seconds = 1 day
@@ -82,7 +98,6 @@ def album_art_view(request, song_id):
     # Save the album art to the static directory
     with Path.open(album_art_path, 'wb') as art_file:
         art_file.write(tag.data)
-        logger.info(f'Album art written to {album_art_path}')
 
     # Serve the album art with cache headers
     response = HttpResponse(tag.data, content_type='image/jpeg')
@@ -124,47 +139,46 @@ def ranking_view(request, facet):
     """Return ranking for whichever facet."""
     current_song = get_object_or_404(Song, id=request.session.get('song_id'))
     if facet == 'artists':
-        artists = Artist.objects.prefetch_related('albums').order_by('-rating')
-        max_rating = max([a.rating for a in artists])
-        min_rating = min([a.rating for a in artists])
-        return render(
-            request,
-            'main/partial_ranking_artists.html',
-            {
-                'artists': artists,
-                'current': current_song,
-                'max_rating': max_rating,
-                'min_rating': min_rating,
-            },
-        )
+        cls = Artist
+        prefetch = 'albums'
     elif facet == 'albums':
-        albums = Album.objects.prefetch_related('artist').order_by('-rating')
-        max_rating = max([a.rating for a in albums])
-        min_rating = min([a.rating for a in albums])
-        return render(
-            request,
-            'main/partial_ranking_albums.html',
-            {
-                'albums': albums,
-                'current': current_song,
-                'max_rating': max_rating,
-                'min_rating': min_rating,
-            },
-        )
+        cls = Album
+        prefetch = 'artist'
     elif facet == 'songs':
-        songs = Song.objects.order_by('-count_played', '-count_rated', 'rating')
-        max_rating = max([a.rating for a in songs])
-        min_rating = min([a.rating for a in songs])
-        return render(
-            request,
-            'main/partial_ranking_songs.html',
-            {
-                'songs': songs,
-                'current': current_song,
-                'max_rating': max_rating,
-                'min_rating': min_rating,
-            },
-        )
+        cls = Song
+        prefetch = None
+    logger.info(f'Fetching ranking for {facet} on class {cls} and prefetching {prefetch}')
+    query = cls.objects
+    if prefetch:
+        query = query.prefetch_related(prefetch)
+    objs = query.order_by('-count_played', '-count_rated', 'rating').all()
+
+    # Add pagination logic
+    paginator = Paginator(objs, 60)  # 10 items per page
+    page = request.GET.get('page')
+
+    try:
+        paginated_objs = paginator.page(page)
+    except PageNotAnInteger:
+        paginated_objs = paginator.page(1)  # If page is not an integer, deliver first page.
+    except EmptyPage:
+        paginated_objs = paginator.page(
+            paginator.num_pages
+        )  # If page is out of range, deliver last page.
+
+    max_rating = max([a.rating for a in objs])
+    min_rating = min([a.rating for a in objs])
+    return render(
+        request,
+        f'main/partial_ranking_{facet}.html',
+        {
+            'facet': facet,
+            'objs': paginated_objs,
+            'current': current_song,
+            'max_rating': max_rating,
+            'min_rating': min_rating,
+        },
+    )
 
 
 def year_view(request):

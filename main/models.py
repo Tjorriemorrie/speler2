@@ -1,3 +1,4 @@
+from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 
@@ -23,7 +24,7 @@ class Rank:
         if rank is None:
             # Use self.__class__.objects to access the manager at the class level
             rank = self.__class__.objects.filter(rating__gt=self.rating).count() + 1
-            cache.set(cache_key, rank, timeout=3600)  # Cache for 1 hour
+            cache.set(cache_key, rank, timeout=7200)  # Cache for 2 hour
 
         return rank
 
@@ -80,6 +81,10 @@ class Song(Timestamp, Rank):
 
     def __str__(self):
         return f'<Song-{self.id} {self.name} {self.artist.name}>'
+
+    def file_exists(self) -> bool:
+        """Checks if audio file exists and can be played."""
+        return (settings.MUSIC_DIR / self.rel_path).is_file()
 
 
 class History(Timestamp):
