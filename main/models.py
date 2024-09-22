@@ -105,3 +105,6 @@ class Rating(Timestamp):
     winner = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='rating_winners')
     loser = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='rating_losers')
     rated_at = models.DateTimeField()
+
+    def __str__(self):
+        return f'<Rating-{self.id} {self.winner.name} beats {self.loser.name}>'

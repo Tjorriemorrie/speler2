@@ -11,17 +11,29 @@ from main.models import History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
+RATINGS_PER_PLAY = 2
+
 
 def get_recent_songs_from_history() -> Set[Song]:
     """Get recent histories of last half hour, limited to 10."""
     time_ago = timezone.now() - timedelta(minutes=30)
-    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:3]
+    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:6]
     songs = set([h.song for h in histories])
     return songs
 
 
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
+    ten_minute = timezone.now() - timedelta(seconds=600)
+    cnt_winner = Rating.objects.filter(winner=current_song, rated_at__gt=ten_minute).count()
+    cnt_loser = Rating.objects.filter(loser=current_song, rated_at__gt=ten_minute).count()
+    logger.info(
+        f'Get match: Found {cnt_winner} wins and {cnt_loser} losses '
+        f'for {current_song} in past 10 minutes.'
+    )
+    if cnt_winner // 2 + cnt_loser >= RATINGS_PER_PLAY:
+        return
+
     songs = get_recent_songs_from_history()
     songs.add(current_song)
     song_ids = [s.id for s in songs]
@@ -47,7 +59,7 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
         # Check if any pair in comb_ids has been rated
         if not any((winner in comb_ids and loser in comb_ids) for winner, loser in rated_pairs):
             match = [current_song, b, c]
-            logger.info(f'Found match: {match}')
+            # logger.info(f'Found match: {match}')
             return match
     logger.info(f'Could not find any match for {song_ids}')
 

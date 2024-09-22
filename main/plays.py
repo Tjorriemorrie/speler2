@@ -39,7 +39,7 @@ def get_next_song() -> Song:
         priority=(
             F('rating')
             - (F('count_played') / Value(max_played))
-            + (F('time_since_played') / Value(avg_days_last_played))
+            + (F('time_since_played') / Value(avg_days_last_played) / 100)
         ),
     ).order_by('-priority')
 
@@ -49,16 +49,12 @@ def get_next_song() -> Song:
         raise ValueError('Expected to get a song, but found nothing')
 
     logger.info(f'Next Song: {next_song}')
-    calculated_priority = (
-        next_song.rating
-        - (next_song.count_played / max_played)
-        + (next_song.time_since_played / avg_days_last_played)
-    )
+    playd = next_song.count_played / max_played
+    tspd = next_song.time_since_played / avg_days_last_played / 100
+    calculated_priority = next_song.rating - playd + tspd
     logger.info(f'Next Song: priority {next_song.priority:.2f} vs calc {calculated_priority:.2f}')
     logger.info(f'Next Song: rating {next_song.rating:.2f}')
-    playd = next_song.count_played / max_played
-    logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played})')
-    tspd = next_song.time_since_played / avg_days_last_played
+    logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played} / 100)')
     logger.info(
         f'Next Song: days {tspd:.2f} ({next_song.time_since_played} / {avg_days_last_played})'
     )
@@ -104,7 +100,7 @@ def get_next_song_priority_values() -> Tuple[int, float]:
         return cached_values
 
     # Calculate max_played
-    max_played = Song.objects.aggregate(Max('count_played'))['count_played__max']
+    max_played = float(Song.objects.aggregate(Max('count_played'))['count_played__max'])
 
     raw_sql = """
         SELECT

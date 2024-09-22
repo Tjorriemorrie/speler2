@@ -1,3 +1,12 @@
 <div class="box-lyrics">
-    {{ lyrics|linebreaks }}
+    <p>
+        <span href="#"
+              hx-get="/lyrics/{{ current_song_id }}/?nocache=1"
+              hx-trigger="click"
+              hx-target="#lyrics-container"
+              hx-swap="innerHTML">
+            <i class="bi bi-wrench"></i>
+        </span>
+        {{ lyrics|linebreaks }}
+    </p>
 </div>

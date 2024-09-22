@@ -225,8 +225,16 @@ def year_view(request):
 
 def lyrics_view(request, song_id: int):
     """Show lyric."""
+    use_cache = not bool(request.GET.get('nocache'))
+    if not use_cache:
+        logger.info(f'Fetching lyrics without cache for {song_id}!')
     song = get_object_or_404(Song, id=song_id)
-    lyrics = get_lyrics_chartlyrics(song)
-    response = render(request, 'main/partial_lyrics.html', {'lyrics': lyrics})
-    patch_cache_control(response, public=True, max_age=86400)
+    lyrics = get_lyrics_chartlyrics(song, use_cache)
+    ctx = {
+        'lyrics': lyrics,
+        'current_song_id': request.session.get('song_id'),
+    }
+    response = render(request, 'main/partial_lyrics.html', ctx)
+    if use_cache:
+        patch_cache_control(response, public=True, max_age=86400)
     return response

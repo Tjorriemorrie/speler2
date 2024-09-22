@@ -57,7 +57,7 @@ def iconrank(value: int, cnt: int, upper: int, lower: int = None, stars: bool = 
 
     # Generate the stars based on the normalized value
     icon = '<i class="bi bi-star sub1"></i>' if stars else '<i class="bi bi-square"></i>'
-    stars_html = icon * round(icon_value)
+    stars_html = '<span style="letter-spacing:0.1em;">' + (icon * round(icon_value)) + '</span>'
     return mark_safe(stars_html)  # noqa: S308
 
 
