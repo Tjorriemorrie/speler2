@@ -118,6 +118,12 @@ def parse_id3_tag(file_path: str) -> dict:
 def get_mp3_metadata(file_path: str) -> dict:
     """Extract metadata from MP3 files."""
     info = {}
+
+    # Access audio properties
+    audio = mp3.MP3('path/to/your/file.mp3')
+    info['track_length'] = audio.info.length
+
+    # Access id3 properties
     meta = id3.ID3(file_path)
     info['song_title'] = str(meta['TIT2'])
     track_info = str(meta['TRCK'])
@@ -130,6 +136,7 @@ def get_mp3_metadata(file_path: str) -> dict:
     info['disc_number'] = int(tpos[0])
     info['total_discs'] = int(tpos[1]) if len(tpos) > 1 else 1
     info['year'] = int(str(meta['TDRC'])[:4])
+
     return info
 
 

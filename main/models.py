@@ -33,6 +33,7 @@ class Artist(Timestamp, Rank):
     name = models.CharField(max_length=150, unique=True)
     slug = models.SlugField(unique=True)
 
+    total_length = models.FloatField()
     count_albums = models.IntegerField(default=0)
     count_songs = models.IntegerField(default=0)
     count_played = models.IntegerField(default=0)
@@ -50,6 +51,7 @@ class Album(Timestamp, Rank):
     total_discs = models.IntegerField()
     total_tracks = models.IntegerField()
 
+    total_length = models.FloatField()
     count_songs = models.IntegerField(default=0)
     count_played = models.IntegerField(default=0)
     played_at = models.DateTimeField(null=True)
@@ -66,6 +68,7 @@ class Song(Timestamp, Rank):
     name = models.CharField(max_length=150)
     disc_number = models.IntegerField()
     track_number = models.IntegerField()
+    track_length = models.FloatField()
 
     # plays
     count_played = models.IntegerField(default=0)

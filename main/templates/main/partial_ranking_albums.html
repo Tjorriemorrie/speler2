@@ -19,6 +19,7 @@
                 <th style="padding-left: 2em;">Name</th>
                 <th>Artist</th>
                 <th>Tracks</th>
+                <th>Duration</th>
                 <th>Plays</th>
                 <th>Last Played</th>
             </tr>
@@ -48,6 +49,7 @@
                     </td>
                     <td>{{ album.artist.name }}</td>
                     <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
+                    <td>{{ album.total_length|dur }}</td>
                     <td>{{ album.count_played }}</td>
                     <td>{{ album.played_at }}</td>
                 </tr>

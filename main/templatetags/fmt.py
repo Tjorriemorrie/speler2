@@ -56,3 +56,18 @@ def iconrank(value: int, cnt: int, upper: int, lower: int = None, stars: bool = 
     icon = '<i class="bi bi-star sub1"></i>' if stars else '<i class="bi bi-square"></i>'
     stars_html = icon * round(icon_value)
     return mark_safe(stars_html)  # noqa: S308
+
+
+@register.filter
+def dur(duration: float) -> str:
+    """Show track duration."""
+    # Convert the duration (in seconds) to hours, minutes, and seconds
+    hours = int(duration // 3600)
+    minutes = int((duration % 3600) // 60)
+    seconds = int(duration % 60)
+
+    # Format the time string based on whether there are hours
+    if hours > 0:
+        return f'{hours}:{minutes:02}:{seconds:02}'  # hh:mm:ss
+    else:
+        return f'{minutes}:{seconds:02}'  # mm:ss

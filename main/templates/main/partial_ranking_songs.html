@@ -19,13 +19,15 @@
                 <th style="padding-left: 2em;">Name</th>
                 <th>Artist</th>
                 <th>Album</th>
+                <th>Duration</th>
                 <th>Plays</th>
                 <th>Last Played</th>
             </tr>
             </thead>
             <tbody>
             {% for song in objs %}
-                <tr id="song-{{ song.id }}" class="{% if song.id == current.id %}fw-bold{% endif %}">
+                <tr id="song-{{ song.id }}"
+                    class="{% if song.id == current.id %}fw-bold{% endif %}">
                     <td class="text-muted">{{ song.rank }}</td>
                     <td class="text-end">
                         <span class="text-muted small">{{ song.count_rated }} @</span>
@@ -45,10 +47,13 @@
                     </td>
                     <td>{{ song.artist.name }}</td>
                     <td>
-                        <a hx-get="{% url 'album' album_id=song.album.id %}" hx-target="#main-container">
-                                <img class="img-fluid" style="height: 1.6em;" src="{% url 'album_art' song.id %}"/> {{ song.album.name }}<br/>
-                            </a>
-                        </td>
+                        <a hx-get="{% url 'album' album_id=song.album.id %}"
+                           hx-target="#main-container">
+                            <img class="img-fluid" style="height: 1.6em;"
+                                 src="{% url 'album_art' song.id %}"/> {{ song.album.name }}<br/>
+                        </a>
+                    </td>
+                    <td>{{ song.track_length|dur }}</td>
                     <td>{{ song.count_played }}</td>
                     <td>{{ song.played_at }}</td>
                 </tr>

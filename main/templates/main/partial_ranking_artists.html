@@ -18,6 +18,7 @@
                 <th colspan="2" class="text-center">Rating</th>
                 <th style="padding-left: 2em;">Name</th>
                 <th>Albums</th>
+                <th>Duration</th>
                 <th>Plays</th>
                 <th>Last Played</th>
             </tr>
@@ -51,6 +52,7 @@
                             </a>
                         {% endfor %}
                     </td>
+                    <td>{{ artist.total_length|dur }}</td>
                     <td>{{ artist.count_played }}</td>
                     <td>{{ artist.played_at }}</td>
                 </tr>
