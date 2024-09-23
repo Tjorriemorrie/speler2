@@ -81,7 +81,6 @@ def next_song_view(request: WSGIRequest):
 
 def next_rating_view(request: WSGIRequest):
     """Return next rating."""
-    logger.info('next rating view request')
     if winner_id := request.GET.get('winner_id'):
         match_ids = request.session.get('match_ids')
         set_match_result(int(winner_id), list(map(int, match_ids)))
@@ -89,7 +88,14 @@ def next_rating_view(request: WSGIRequest):
     current_song = Song.objects.get(id=request.session.get('song_id'))
     match = get_match(current_song)
     request.session['match_ids'] = [s.id for s in match] if match else None
-    return render(request, 'main/partial_song_rating.html', {'match': match})
+
+    response = render(request, 'main/partial_song_rating.html', {'match': match})
+
+    # Set the HX-Trigger header to load matches
+    if not match:
+        response['HX-Trigger'] = 'loadAlbumView'
+
+    return response
 
 
 def album_art_view(request, song_id):
@@ -172,7 +178,7 @@ def ranking_view(request, facet):
     objs = query.order_by('-rating', '-count_played', '-count_rated').all()
 
     # Add pagination logic
-    paginator = Paginator(objs, 60)  # 10 items per page
+    paginator = Paginator(objs, 30)  # 10 items per page
     page = request.GET.get('page')
 
     try:
@@ -233,6 +239,7 @@ def lyrics_view(request, song_id: int):
     ctx = {
         'lyrics': lyrics,
         'current_song_id': request.session.get('song_id'),
+        'use_cache': use_cache,
     }
     response = render(request, 'main/partial_lyrics.html', ctx)
     if use_cache:

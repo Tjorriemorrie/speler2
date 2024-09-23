@@ -1,28 +1,28 @@
 {% load static %}
 {% load fmt %}
-<div class="row mt-1">
+<div class="row">
 
-    <div class="col-3 text-end">
+    <div class="col-4 col-lg-3 text-end">
         <p style="">
             <img class="img-fluid img-thumbnail" src="{% url 'album_art' song.id %}"
-                 style="max-height: 12em;"
+                 style="max-height: 13em;"
                  alt="{{ song.album.name }} album art"/>
         </p>
     </div>
 
-    <div class="col-9" id="songData"
+    <div class="col-8 col-lg-9" id="songData"
          data-rating="{{ song.rating }}"
          data-songtitle="{{ song.name }} | {{ song.artist.name }}"
          data-songsrc="{% static song.rel_path %}"
     >
-        <h2 style="margin-bottom: 0.2em;">
+        <h2 class="mb-2">
             {{ song.name }}
             <span class="title-icon-rank">
                 <br/>{% iconrank song.rating 5 1 0 %}&nbsp;
             </span>
         </h2>
-        <h3><em>{{ song.artist.name }}</em></h3>
-        <h5>{{ song.album.name }}</h5>
+        <h3 class=""><em>{{ song.artist.name }}</em></h3>
+        <h5 class="">{{ song.album.name }}</h5>
         {% if filter_value %}
             <br/>
             <p style="color: #666">

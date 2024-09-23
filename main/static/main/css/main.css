@@ -1,59 +1,168 @@
-.top_height {
-    height: 22vh;
+/* Default for Extra small XS <= 576 */
+html {
+    font-size: 70%;
 }
 
-.min-vh-15 {
-    min-height: 15vh;
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    html {
+        font-size: 80%;
+    }
 }
 
-
-.small-font-table {
-    font-size: 0.7em;
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    html {
+        font-size: 100%;
+    }
 }
 
-.nav-link {
-    color: lightgray;
-    text-decoration: none;
-    padding: 0.8em 0.5em;
+/************************** HEADER ***********************************/
+
+/* give header a minimum height
+    it prevents jumps on load */
+.header {
+    min-height: 8em;
 }
 
-.nav-link:hover {
-    color: darkgray;
-    text-decoration: none;
+@media (max-width: 576px) {
+    #songData h2 {
+        font-size: 1.4em;
+    }
+
+    #songData h3 {
+        font-size: 1.2em;
+    }
+
+    #songData h5 {
+        font-size: 1em;
+    }
 }
 
-.navbar {
-    overflow: visible; /* Ensure the controls are visible */
+/************************** NAVIGATION ***********************************/
+
+a.nav-link {
+    color: #aaa;
+    /*text-decoration: none;*/
+    /*padding: 0.8em 0.5em;*/
 }
 
-.skip-controls {
-    margin-left: -1em;
-    color: gray;
+a.nav-link.skip-control {
+    color: #444;
+    font-size: 1.3em;
 }
 
 .plyr {
-    z-index: 1; /* Ensure the audio player is above other elements */
-    width: 100%; /* Make sure it’s responsive */
-    max-width: 100%; /* Prevent it from exceeding its container */
+    width: 20em;
 }
 
-.plyr--audio .plyr__controls {
+/* Hide Plyr volume slider and speed settings on extra small screens */
+@media (max-width: 576px) {
+    .plyr__controls .plyr__volume {
+        display: none; /* Hides the volume slider */
+    }
+
+    .plyr__controls .plyr__menu {
+        display: none; /* Hides the speed settings icon */
+    }
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .plyr {
+        width: 40em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .plyr {
+        width: 40em;
+    }
+}
+
+.plyr .plyr__controls {
     background: none !important;
 }
 
 
-/* album view */
+/************************** LYRICS ***********************************/
 
-.side-album p {
+.box-lyrics {
+    text-align: left;
+    box-shadow: inset -10px 0px 15px -5px rgba(0, 0, 0, 0.2);
+    line-height: 1em;
+    font-size: 0.8em;
+    color: #444;
+    position: relative;
+}
+
+.box-lyrics span {
+    font-size: 0.9em;
+    color: #888;
+    position: absolute;
+    right: 1.1em;
+    top: 0.05em;
+}
+
+.box-lyrics span:hover {
+    cursor: pointer;
+}
+
+.box-lyrics p {
+    margin-bottom: 0.5em;
+}
+
+.box-lyrics p:first-of-type {
+    font-style: italic;
+}
+
+/************************** TABLES ***********************************/
+
+.small-font-table {
+    font-size: 0.9em;
+}
+
+
+/************************** YEAR VIEW ***********************************/
+
+.year-data i {
+    color: #666;
+}
+
+/************************** ALBUM VIEW  ***********************************/
+
+.av-center p {
     margin: 0;
-    font-size: 0.9rem;
-    color: #6d6d6d;
+    font-size: 0.9em;
+    color: #444;
+}
+
+.av-center img {
+    height: 5em;
+}
+
+.side-album {
+    text-decoration: none;
+    font-style: normal;
+    color: #666;
+    margin-top: 0.5em;
 }
 
 .side-album img {
-    max-height: 5em;
-    /*margin-top: 0.5em;*/
+    height: 4em;
+    width: 4em;
+    padding: 0 0.1em;
 }
+
+.side-album p {
+    margin: 0;
+    font-size: 0.7rem;
+}
+
+/**************************  ***********************************/
+
+
 
 
 table {
@@ -172,25 +281,6 @@ a.play-icon {
 
 .album-details {
     display: inline-block;
-}
-
-.box-lyrics {
-    text-align: left;
-    box-shadow: inset -10px 0px 15px -5px rgba(0, 0, 0, 0.2);
-    line-height: 1em;
-    font-size: 0.7em;
-    /*border-right: 1px solid #999;*/
-    color: #333;
-}
-
-.box-lyrics span {
-    font-size: 0.8em;
-    padding-right: 1.2em;
-    float: right;
-    color: #888;
-}
-.box-lyrics span:hover {
-    cursor: pointer;
 }
 
 .title-icon-rank {

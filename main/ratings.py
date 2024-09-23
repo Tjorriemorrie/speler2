@@ -1,7 +1,7 @@
 import logging
 from datetime import timedelta
 from itertools import combinations
-from typing import List, Optional, Set
+from typing import List, Optional
 
 from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
@@ -11,33 +11,33 @@ from main.models import History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
-RATINGS_PER_PLAY = 2
+RATINGS_PER_PLAY = 3
+RATINGS_RATIO = 0.7
+RATINGS_WINDOW = 60 * 30  # minutes
 
 
-def get_recent_songs_from_history() -> Set[Song]:
+def get_recent_songs_from_history() -> List[Song]:
     """Get recent histories of last half hour, limited to 10."""
-    time_ago = timezone.now() - timedelta(minutes=30)
-    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:6]
-    songs = set([h.song for h in histories])
+    time_ago = timezone.now() - timedelta(minutes=RATINGS_WINDOW)
+    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:8]
+    songs = []
+    for h in histories:
+        if h.song not in songs:
+            songs.append(h.song)
     return songs
 
 
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
-    ten_minute = timezone.now() - timedelta(seconds=600)
-    cnt_winner = Rating.objects.filter(winner=current_song, rated_at__gt=ten_minute).count()
-    cnt_loser = Rating.objects.filter(loser=current_song, rated_at__gt=ten_minute).count()
-    logger.info(
-        f'Get match: Found {cnt_winner} wins and {cnt_loser} losses '
-        f'for {current_song} in past 10 minutes.'
-    )
-    if cnt_winner // 2 + cnt_loser >= RATINGS_PER_PLAY:
+    rate_count_cut_off = (current_song.count_played + RATINGS_RATIO) * RATINGS_PER_PLAY
+    logger.info(f'Get match: is rated {current_song.count_rated} < {rate_count_cut_off}')
+    if current_song.count_rated >= rate_count_cut_off:
         return
 
     songs = get_recent_songs_from_history()
-    songs.add(current_song)
+    songs.insert(0, current_song)
     song_ids = [s.id for s in songs]
-    logger.info(f'Searching {song_ids} for a match...')
+    # logger.info(f'Searching {song_ids} for a match...')
 
     # Filter ratings for the relevant song pairs
     ratings = Rating.objects.filter(
@@ -51,16 +51,21 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
         rated_pairs.add((loser, winner))  # Add reverse pair for bidirectional check
 
     # Find combinations of songs that have no ratings between them
-    for b, c in combinations(songs, 2):
-        # Ensure current_song is not one of b or c
-        if current_song in (b, c):
-            continue
-        comb_ids = {current_song.id, b.id, c.id}
-        # Check if any pair in comb_ids has been rated
-        if not any((winner in comb_ids and loser in comb_ids) for winner, loser in rated_pairs):
-            match = [current_song, b, c]
-            # logger.info(f'Found match: {match}')
-            return match
+    songs_bag = []
+    for ix, song in enumerate(songs):
+        logger.debug(f'Get match: song bag {ix}: {song}')
+        songs_bag.append(song)
+        for b, c in combinations(songs_bag, 2):
+            # Ensure current_song is not one of b or c
+            if current_song in (b, c):
+                continue
+            # logger.info(f'Get match: checking {b} && {c}')
+            comb_ids = {current_song.id, b.id, c.id}
+            # Check if any pair in comb_ids has been rated
+            if not any((winner in comb_ids and loser in comb_ids) for winner, loser in rated_pairs):
+                match = [current_song, b, c]
+                logger.info(f'Get match: {match}')
+                return match
     logger.info(f'Could not find any match for {song_ids}')
 
 

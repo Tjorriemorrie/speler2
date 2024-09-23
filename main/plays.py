@@ -23,7 +23,7 @@ def get_next_song() -> Song:
         logger.info(f'Returning unplayed random song: {song}')
         return song
 
-    max_played, avg_days_last_played = get_next_song_priority_values()
+    max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
     time_since_played_expr = RawSQL("(julianday('now') - julianday(main_song.played_at))", [])
@@ -39,7 +39,7 @@ def get_next_song() -> Song:
         priority=(
             F('rating')
             - (F('count_played') / Value(max_played))
-            + (F('time_since_played') / Value(avg_days_last_played) / 100)
+            + (F('time_since_played') / Value(time_till_last_played))
         ),
     ).order_by('-priority')
 
@@ -49,15 +49,16 @@ def get_next_song() -> Song:
         raise ValueError('Expected to get a song, but found nothing')
 
     logger.info(f'Next Song: {next_song}')
-    playd = next_song.count_played / max_played
-    tspd = next_song.time_since_played / avg_days_last_played / 100
-    calculated_priority = next_song.rating - playd + tspd
-    logger.info(f'Next Song: priority {next_song.priority:.2f} vs calc {calculated_priority:.2f}')
-    logger.info(f'Next Song: rating {next_song.rating:.2f}')
-    logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played} / 100)')
-    logger.info(
-        f'Next Song: days {tspd:.2f} ({next_song.time_since_played} / {avg_days_last_played})'
-    )
+    # playd = next_song.count_played / max_played
+    # tspd = next_song.time_since_played / time_till_last_played
+    # calculated_priority = next_song.rating - playd + tspd
+    logger.info(f'Next Song: priority {next_song.priority:.3f}')
+    # logger.info(f'Next Song: calc {calculated_priority:.3f}')
+    # logger.info(f'Next Song: rating {next_song.rating:.2f}')
+    # logger.info(f'Next Song: played {playd:.2f} ({next_song.count_played} / {max_played})')
+    # logger.info(
+    #     f'Next Song: days {tspd:.2f} ({next_song.time_since_played} / {time_till_last_played})'
+    # )
     return next_song
 
 
@@ -91,7 +92,7 @@ class Julianday(Func):
     template = '%(function)s(%(expressions)s)'
 
 
-def get_next_song_priority_values() -> Tuple[int, float]:
+def get_next_song_priority_values() -> Tuple[float, float]:
     """Get values for calculated priority with caching."""
     cache_key = 'next_song_priority_values'
     cached_values = cache.get(cache_key)
@@ -104,7 +105,7 @@ def get_next_song_priority_values() -> Tuple[int, float]:
 
     raw_sql = """
         SELECT
-            AVG(julianday(played_at)) AS avg_julian_day,
+            MIN(julianday(played_at)) AS earliest_julian_day,
             julianday('now') AS current_julian_day
         FROM main_song
     """
@@ -112,20 +113,20 @@ def get_next_song_priority_values() -> Tuple[int, float]:
     # Execute raw SQL
     with connection.cursor() as cursor:
         cursor.execute(raw_sql)
-        avg_julian_day, current_julian_day = cursor.fetchone()
-        logger.info(f'avg julian: {avg_julian_day}')
+        earliest_julian_day, current_julian_day = cursor.fetchone()
+        logger.info(f'earliest julian: {earliest_julian_day}')
         logger.info(f'cur julian: {current_julian_day}')
 
-    if avg_julian_day is None:
-        avg_days_last_played = 1  # Default value if no data
+    if earliest_julian_day is None:
+        julian_till_earliest = 1  # Default value if no data
     else:
-        # Calculate days since average Julian Day
-        avg_days_last_played = current_julian_day - avg_julian_day
+        # Calculate days since earliest Julian Day
+        julian_till_earliest = current_julian_day - earliest_julian_day
 
         # Ensure the value is at least 1 to avoid division by zero
-        avg_days_last_played = max(avg_days_last_played, 1)
+        julian_till_earliest = max(julian_till_earliest, 1)
 
     # Cache the values for 2 hour (3600 seconds * 2)
-    cache.set(cache_key, (max_played, avg_days_last_played), timeout=7200)
+    cache.set(cache_key, (max_played, julian_till_earliest), timeout=7200)
 
-    return max_played, avg_days_last_played
+    return max_played, julian_till_earliest

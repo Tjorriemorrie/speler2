@@ -46,10 +46,11 @@ def get_lyrics_chartlyrics(song: Song, use_cache: bool = True) -> str:
     song_el = root.find('.//ns:LyricSong', namespace)
     if lyrics is not None and lyrics.text:
         lyrics_txt = lyrics.text
-        if '\n' not in lyrics_txt and '\r' not in lyrics_txt:
-            lyrics_txt = re.sub(r'(?<!^)([A-Z])', r'\n\1', lyrics_txt)
+        # clean text
+        lyrics_txt = clean_text_with_paragraphs(lyrics_txt)
         # add artist and song
         lyrics_txt = f'{artist_el.text} - {song_el.text}\n\n{lyrics_txt}'
+        # store text
         if use_cache:
             with Path.open(lyrics_file_path, 'w', encoding='utf-8') as file:
                 file.write(lyrics_txt)
@@ -57,3 +58,24 @@ def get_lyrics_chartlyrics(song: Song, use_cache: bool = True) -> str:
         return lyrics_txt
     else:
         return 'Lyrics not found.'
+
+
+def clean_text_with_paragraphs(html_text):
+    """Remove html tags."""
+    # Replace only </p> tags with two line breaks
+    text_with_breaks = re.sub(r'</p>', '\n\n', html_text)
+
+    # Remove all other HTML tags, including <p>
+    clean_text = re.sub(r'<[^>]+>', '', text_with_breaks)
+
+    # Strip leading line breaks and whitespace
+    clean_text = re.sub(r'^\s*\n+', '', clean_text)
+
+    # Strip leading/trailing whitespace
+    clean_text = clean_text.strip()
+
+    # Add line breaks before capitals if none is found
+    if '\n' not in clean_text and '\r' not in clean_text:
+        clean_text = re.sub(r'(?<!^)([A-Z])', r'\n\n\1', clean_text)
+
+    return clean_text

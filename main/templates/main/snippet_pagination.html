@@ -2,7 +2,7 @@
 <nav aria-label="Page navigation example">
     <ul class="pagination pagination-sm justify-content-end">
         <!-- First Page Button -->
-        {% if objs.has_previous and objs.number > 6 %}
+        {% if objs.has_previous and objs.number > 5 %}
             <li class="page-item">
                 <a class="page-link" href="#"
                    hx-get="/ranking/{{ facet }}/?page=1"
@@ -15,7 +15,7 @@
 
         <!-- Previous 5 and Next 5 Page Numbers -->
         {% for i in objs.paginator.page_range %}
-            {% if i >= objs.number|add:-5 and i <= objs.number|add:5 %}
+            {% if i >= objs.number|add:-4 and i <= objs.number|add:4 %}
                 <li class="page-item {% if i == objs.number %}active{% endif %}">
                     <a class="page-link" href="#"
                        hx-get="/ranking/{{ facet }}/?page={{ i }}"
@@ -28,7 +28,7 @@
         {% endfor %}
 
         <!-- Last Page Button -->
-        {% if objs.has_next and objs.number < objs.paginator.num_pages|add:-5 %}
+        {% if objs.has_next and objs.number < objs.paginator.num_pages|add:-4 %}
             <li class="page-item">
                 <a class="page-link" href="#"
                    hx-get="/ranking/{{ facet }}/?page={{ objs.paginator.num_pages }}"

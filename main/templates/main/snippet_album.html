@@ -1,15 +1,12 @@
 {% load fmt %}
-<a class="nav-link"
+<a class="d-flex flex-column align-items-center side-album"
    href="#"
    hx-get="/album/{{ album.id }}/"
    hx-target="#main-container"
    hx-swap="innerHTML">
-    <div class="text-center side-album">
-        <p><img class="img-fluid" src="{% url 'album_art' album.songs.first.id %}"
-                alt="{{ album.name }} album art"/>
-        </p>
-        <p class="">{{ album.name }}</p>
-        <p><em><small>{{ album.year }}</small></em></p>
-        <p style="font-size: 0.7em; color: #aaa;">#{{ album.rank }}</p>
+    <div class="text-center d-flex flex-column align-items-center">
+        <p>{{ album.year }}</p>
+        <img src="{% url 'album_art' album.songs.first.id %}"/>
+        <p>#{{ album.rank }}</p>
     </div>
 </a>

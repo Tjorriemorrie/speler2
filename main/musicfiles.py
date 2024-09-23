@@ -72,6 +72,7 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
         slug=artist_slug,
         defaults={
             'name': metadata['artist_name'],
+            'total_length': 0,
         },
     )
     if artist_created:
@@ -86,6 +87,7 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
             'year': metadata['year'],
             'total_tracks': metadata['total_tracks'],
             'total_discs': metadata['total_discs'],
+            'total_length': 0,
         },
     )
     if album_created:
@@ -124,7 +126,7 @@ def get_mp3_metadata(file_path: str) -> dict:
     info = {}
 
     # Access audio properties
-    audio = mp3.MP3('path/to/your/file.mp3')
+    audio = mp3.MP3(file_path)
     info['track_length'] = audio.info.length
 
     # Access id3 properties

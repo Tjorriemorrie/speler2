@@ -1,0 +1,93 @@
+<div class="row">
+    <div class="col">
+        <nav class="navbar navbar-expand-lg bg-body-tertiary">
+            <div class="container-fluid">
+
+                <!-- Left-aligned block -->
+                <div class="d-flex justify-content-start col">
+                    <ul class="navbar-nav d-flex flex-row">
+                        <li class="nav-item me-3">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/artists/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                <i class="bi bi-person-fill"></i>
+                                <span class="d-none d-xl-inline">Artists</span>
+                            </a>
+                        </li>
+                        <li class="nav-item me-3">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/albums/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                <i class="bi bi-disc-fill"></i>
+                                <span class="d-none d-xl-inline">Albums</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/ranking/songs/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                <i class="bi bi-collection-play-fill"></i>
+                                <span class="d-none d-xl-inline">Songs</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Center-aligned block -->
+                <div class="d-flex justify-content-center col flex-grow-1">
+                    <ul class="navbar-nav d-flex flex-row align-items-center">
+                        <li class="nav-item">
+                            <audio class="plyr audio-player" controls preload="auto">
+                                Your browser does not support the audio element.
+                            </audio>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link skip-control"
+                               href="#"
+                               hx-get="/next-song/"
+                               hx-target="#player-container"
+                               hx-swap="innerHTML">
+                                <i class="bi bi-fast-forward-fill"></i>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+                <!-- Right-aligned block -->
+                <div class="d-flex justify-content-end col">
+                    <ul class="navbar-nav d-flex flex-row align-items-center">
+                        <!-- Added d-flex and flex-row -->
+                        <li class="nav-item me-3">
+                            <a id="albumViewLink" class="nav-link"
+                               href="#"
+                               hx-get="/album/0/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML"
+                               hx-trigger="click">
+                                <i class="bi bi-caret-down-square-fill"></i>
+                                <span class="d-none d-xl-inline">Current</span>
+                            </a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="nav-link"
+                               href="#"
+                               hx-get="/year/"
+                               hx-target="#main-container"
+                               hx-swap="innerHTML">
+                                <i class="bi bi-calendar-date-fill d-xs-block"></i>
+                                <span class="d-none d-xl-inline">Year</span>
+                            </a>
+                        </li>
+                    </ul>
+                </div>
+
+            </div>
+        </nav>
+    </div>
+</div>

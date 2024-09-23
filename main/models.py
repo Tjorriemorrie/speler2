@@ -83,6 +83,7 @@ class Song(Timestamp, Rank):
     objects = managers.SongManager()
 
     def __str__(self):
+        """Get str."""
         return f'<Song-{self.id} {self.name} {self.artist.name}>'
 
     def file_exists(self) -> bool:
@@ -98,6 +99,7 @@ class History(Timestamp):
         ordering = ['-played_at']
 
     def __str__(self):
+        """Get str."""
         return f'<History-{self.id} {self.played_at:%Y-%m-%d} {self.song.name}>'
 
 
@@ -107,4 +109,4 @@ class Rating(Timestamp):
     rated_at = models.DateTimeField()
 
     def __str__(self):
-        return f'<Rating-{self.id} {self.winner.name} beats {self.loser.name}>'
+        return f'<Rating-{self.id} {self.winner.name} >>> {self.loser.name}>'
