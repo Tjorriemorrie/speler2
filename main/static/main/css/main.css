@@ -1,6 +1,61 @@
+/************************** FONTS ***********************************/
+
+@font-face {
+    font-family: 'Dosis';
+    src: url('/static/main/fonts/Dosis-Light.otf') format('opentype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+
+@font-face {
+    font-family: 'Belligerent';
+    src: url('/static/main/fonts/belligerent.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Quintessential';
+    src: url('/static/main/fonts/Quintessential-Regular.ttf') format('truetype');
+    font-weight: normal;
+    font-style: normal;
+}
+
+@font-face {
+    font-family: 'Calligraffiti';
+    src: url('/static/main/fonts/Calligraffiti.ttf') format('truetype'); /* TTF format */
+    font-weight: bold;
+    font-style: normal;
+}
+
+.title-font {
+    font-family: 'Calligraffiti', cursive;
+}
+
+.album-font {
+    font-family: 'Belligerent', cursive;
+}
+
+.artist-font {
+    font-family: 'Quintessential', cursive;
+}
+
+.lyrics-font {
+    font-family: 'Dosis', sans-serif;
+}
+
+table {
+    font-family: 'Helvetica Neue', Arial, sans-serif;
+}
+
+
+/************************** GLOBAL ***********************************/
+
 /* Default for Extra small XS <= 576 */
 html {
     font-size: 70%;
+    font-family: Arial, sans-serif;
 }
 
 /* Large LG > 992 */
@@ -26,17 +81,29 @@ html {
 }
 
 @media (max-width: 576px) {
-    #songData h2 {
-        font-size: 1.4em;
+    #songData h3 {
+        font-size: 1.6em;
     }
 
-    #songData h3 {
+    #songData h4 {
         font-size: 1.2em;
     }
 
     #songData h5 {
         font-size: 1em;
     }
+}
+
+.title-icon-rank {
+    font-size: 0.5em;
+    display: block;
+    line-height: 0;
+    padding-left: 0.1em;
+    margin-top: -0.4em;
+}
+
+#songData .title-font {
+    margin-top: 0.4em;
 }
 
 /************************** NAVIGATION ***********************************/
@@ -91,8 +158,8 @@ a.nav-link.skip-control {
 .box-lyrics {
     text-align: left;
     box-shadow: inset -10px 0px 15px -5px rgba(0, 0, 0, 0.2);
-    line-height: 1em;
-    font-size: 0.8em;
+    line-height: 1.05em;
+    font-size: 0.9em;
     color: #444;
     position: relative;
 }
@@ -101,8 +168,8 @@ a.nav-link.skip-control {
     font-size: 0.9em;
     color: #888;
     position: absolute;
-    right: 1.1em;
-    top: 0.05em;
+    right: 1em;
+    top: 0.1em;
 }
 
 .box-lyrics span:hover {
@@ -111,6 +178,7 @@ a.nav-link.skip-control {
 
 .box-lyrics p {
     margin-bottom: 0.5em;
+    padding-right: 1em;
 }
 
 .box-lyrics p:first-of-type {
@@ -134,12 +202,22 @@ a.nav-link.skip-control {
 
 .av-center p {
     margin: 0;
+    padding: 0;
     font-size: 0.9em;
     color: #444;
 }
 
 .av-center img {
     height: 5em;
+    margin: 0;
+    padding: 0;
+}
+
+.av-center h5 span {
+    color: #999;
+    font-size: 0.8em;
+    padding-left: 0.2em;
+    font-style: italic;
 }
 
 .side-album {
@@ -151,7 +229,6 @@ a.nav-link.skip-control {
 
 .side-album img {
     height: 4em;
-    width: 4em;
     padding: 0 0.1em;
 }
 
@@ -160,9 +237,77 @@ a.nav-link.skip-control {
     font-size: 0.7rem;
 }
 
+
+/************************** ARTIST VIEW  ***********************************/
+
+.artist-view .card-img-top {
+    height: 13em;
+    object-fit: cover;
+}
+
+.artist-view .card-title {
+    font-size: 120%;
+}
+
+.artist-view sub {
+    color: #888;
+    font-size: 70%;
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .artist-view .card-title {
+        font-size: 160%;
+    }
+
+    .artist-view .card-img-top {
+        height: 17em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .artist-view .card-title {
+        font-size: 140%;
+    }
+
+    .artist-view .card-img-top {
+        height: 10em;
+    }
+}
+
+
+/************************** RATINGS ***********************************/
+
+/* Ensure the card height is minimized */
+.card.compact-card {
+    /*min-height: 150px; !* Set a minimum height for the card *!*/
+    /*max-height: 200px; !* Set a maximum height for the card *!*/
+    /*overflow: hidden; !* Hide overflow content if it exceeds max-height *!*/
+}
+
+/* Adjust padding and margins */
+.card-body {
+    padding: 0.75rem; /* Reduce padding inside the card */
+}
+
+.card-title {
+    font-size: 1rem;
+    margin: 0;
+    padding-bottom: 0.2em;
+}
+
+.card-subtitle {
+    font-size: 0.875rem; /* Reduce font size of subtitles */
+    margin-bottom: 0.25rem; /* Add margin to the bottom */
+}
+
+/* Optional: Adjust card border radius if needed */
+.card {
+    border-radius: 0.375rem; /* Rounded corners */
+}
+
 /**************************  ***********************************/
-
-
 
 
 table {
@@ -218,34 +363,6 @@ tr.bg-secondary-subtle {
 }
 
 
-/* Ensure the card height is minimized */
-.card.compact-card {
-    /*min-height: 150px; !* Set a minimum height for the card *!*/
-    /*max-height: 200px; !* Set a maximum height for the card *!*/
-    /*overflow: hidden; !* Hide overflow content if it exceeds max-height *!*/
-}
-
-/* Adjust padding and margins */
-.card-body {
-    padding: 0.75rem; /* Reduce padding inside the card */
-}
-
-.card-title {
-    font-size: 1rem; /* Reduce font size of the title */
-    margin-bottom: 0.5rem; /* Add margin to the bottom */
-}
-
-.card-subtitle {
-    font-size: 0.875rem; /* Reduce font size of subtitles */
-    margin-bottom: 0.25rem; /* Add margin to the bottom */
-}
-
-/* Optional: Adjust card border radius if needed */
-.card {
-    border-radius: 0.375rem; /* Rounded corners */
-}
-
-
 .sub1 {
     font-size: 0.8em;
     color: gray;
@@ -283,9 +400,9 @@ a.play-icon {
     display: inline-block;
 }
 
-.title-icon-rank {
-    font-size: 0.5em;
-    display: block;
-    line-height: 0.15em;
-    padding-left: 0.2em;
+
+.no-blue {
+    text-decoration: none !important;
+    font-style: normal !important;
+    color: #333;
 }

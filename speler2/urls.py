@@ -27,6 +27,7 @@ urlpatterns = [
     path('next-rating/', views.next_rating_view, name='next_rating'),
     path('album-art/<int:song_id>/', views.album_art_view, name='album_art'),
     path('album/<int:album_id>/', views.album_view, name='album'),
+    path('artist/<int:artist_id>/', views.artist_view, name='artist'),
     path('ranking/<str:facet>/', views.ranking_view, name='ranking'),
     path('year/', views.year_view, name='year'),
     path('lyrics/<int:song_id>/', views.lyrics_view, name='lyric_txt'),

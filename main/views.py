@@ -10,7 +10,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
 
-from main.lyrics import get_lyrics_chartlyrics
+from main.lyrics import search_azlyrics
 from main.models import Album, Artist, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, set_played
@@ -159,6 +159,17 @@ def album_view(request, album_id):
     )
 
 
+def artist_view(request: WSGIRequest, artist_id: int) -> HttpResponse:
+    """Get artist details."""
+    artist = get_object_or_404(Artist, id=artist_id)
+    albums = artist.albums.order_by('-rating').all()
+    ctx = {
+        'artist': artist,
+        'albums': albums,
+    }
+    return render(request, 'main/partial_artist.html', ctx)
+
+
 def ranking_view(request, facet):
     """Return ranking for whichever facet."""
     current_song = get_object_or_404(Song, id=request.session.get('song_id'))
@@ -235,7 +246,8 @@ def lyrics_view(request, song_id: int):
     if not use_cache:
         logger.info(f'Fetching lyrics without cache for {song_id}!')
     song = get_object_or_404(Song, id=song_id)
-    lyrics = get_lyrics_chartlyrics(song, use_cache)
+    # lyrics = get_lyrics_chartlyrics(song, use_cache)
+    lyrics = search_azlyrics(song, use_cache)
     ctx = {
         'lyrics': lyrics,
         'current_song_id': request.session.get('song_id'),

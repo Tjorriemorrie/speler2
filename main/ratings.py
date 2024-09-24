@@ -18,7 +18,7 @@ RATINGS_WINDOW = 60 * 30  # minutes
 
 def get_recent_songs_from_history() -> List[Song]:
     """Get recent histories of last half hour, limited to 10."""
-    time_ago = timezone.now() - timedelta(minutes=RATINGS_WINDOW)
+    time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
     histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:8]
     songs = []
     for h in histories:

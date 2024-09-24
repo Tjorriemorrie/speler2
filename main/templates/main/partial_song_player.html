@@ -15,14 +15,14 @@
          data-songtitle="{{ song.name }} | {{ song.artist.name }}"
          data-songsrc="{% static song.rel_path %}"
     >
-        <h2 class="mb-2">
+        <h3 class="mb-2 title-font">
             {{ song.name }}
             <span class="title-icon-rank">
                 <br/>{% iconrank song.rating 5 1 0 %}&nbsp;
             </span>
-        </h2>
-        <h3 class=""><em>{{ song.artist.name }}</em></h3>
-        <h5 class="">{{ song.album.name }}</h5>
+        </h3>
+        <h4 class="artist-font"><em>{{ song.artist.name }}</em></h4>
+        <h5 class="album-font">{{ song.album.name }}</h5>
         {% if filter_value %}
             <br/>
             <p style="color: #666">

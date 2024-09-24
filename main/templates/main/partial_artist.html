@@ -1,0 +1,50 @@
+{% load fmt %}
+<div class="row artist-view">
+    <div class="col text-center">
+
+        <h3 class="artist-font fs-2 my-3">
+            {{ artist.name }}
+            <br/>
+            <sub>#{{ artist.rank }}</sub>
+        </h3>
+
+        <div class="container">
+            <div class="row">
+                {% for album in albums %}
+                    <div class="col-4 col-lg-3 col-xl-2 my-3">
+
+                        <a id="albumViewLink" class="no-blue"
+                           href="#"
+                           hx-get="/album/{{ album.id }}/"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML"
+                           hx-trigger="click">
+
+                            <div class="card h-100">
+
+                                <img class="card-img-top"
+                                     src="{% url 'album_art' album.songs.first.id %}"/>
+
+                                <div class="card-body">
+                                    <h5 class="card-title album-font my-2">
+                                        {{ album.name }}
+                                        <br/>
+                                        <sub>#{{ album.rank }}</sub>
+                                    </h5>
+                                    <p class="card-text">{{ album.rating|perc }}%</p>
+                                </div>
+
+                                <div class="card-footer">
+                                    <small class="text-muted">{{ album.year }}</small>
+                                </div>
+
+                            </div>
+                        </a>
+
+                    </div>
+                {% endfor %}
+            </div>
+        </div>
+
+    </div>
+</div>

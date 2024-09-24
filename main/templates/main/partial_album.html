@@ -32,8 +32,17 @@
                     <p>#{{ album.rank }}</p>
                 </div>
                 <div class="text-start">
-                    <h6>{{ album.artist.name }}</h6>
-                    <h5>{{ album.name }}</h5>
+                    <h5 class="artist-font">
+                        <a class="no-blue" href="#"
+                           hx-get="/artist/{{ album.artist.id }}/"
+                           hx-trigger="click"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                        {{ album.artist.name }}
+                        </a>
+                        <span>#{{ album.artist.rank }}</span>
+                    </h5>
+                    <h5 class="album-font">{{ album.name }}</h5>
                 </div>
             </div>
 
