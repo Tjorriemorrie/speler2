@@ -4,9 +4,16 @@
 
     <div class="col-4 col-lg-3 text-end">
         <p style="">
+            <a class="no-blue"
+               href="#"
+               hx-get="/album/{{ song.album.id }}/"
+               hx-target="#main-container"
+               hx-swap="innerHTML"
+               hx-trigger="click">
             <img class="img-fluid img-thumbnail" src="{% url 'album_art' song.id %}"
                  style="max-height: 13em;"
                  alt="{{ song.album.name }} album art"/>
+            </a>
         </p>
     </div>
 
@@ -15,7 +22,7 @@
          data-songtitle="{{ song.name }} | {{ song.artist.name }}"
          data-songsrc="{% static song.rel_path %}"
     >
-        <h3 class="mb-2 title-font">
+        <h3 class="mb-2 title-font ellipsis">
             {{ song.name }}
             <span class="title-icon-rank">
                 <br/>{% iconrank song.rating 5 1 0 %}&nbsp;
@@ -23,16 +30,29 @@
         </h3>
         <h4 class="artist-font"><em>{{ song.artist.name }}</em></h4>
         <h5 class="album-font">{{ song.album.name }}</h5>
+
         {% if filter_value %}
-            <br/>
-            <p style="color: #666">
+            <p style="color: #666" class="my-3">
                 Only playing: {{ filter_value.name }}
                 <a class="play-icon"
                    href="#"
                    hx-get="/next-song/?remove_facet=1"
                    hx-target="#player-container"
                    hx-swap="innerHTML">
-                    &nbsp;<i class="bi bi-trash" style="font-size: 0.8em"></i>
+                    &nbsp;<i class="bi bi-pause-circle-fill" style="font-size: 0.8em"></i>
+                </a>
+            </p>
+        {% endif %}
+
+        {% if genre_values %}
+            <p style="color: #666" class="my-3">
+                Only playing: {{ genre_values }}
+                <a class="play-icon"
+                   href="#"
+                   hx-get="/next-song/?remove_genre=1"
+                   hx-target="#player-container"
+                   hx-swap="innerHTML">
+                    &nbsp;<i class="bi bi-pause-circle-fill" style="font-size: 0.8em"></i>
                 </a>
             </p>
         {% endif %}

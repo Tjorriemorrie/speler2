@@ -22,6 +22,7 @@
                 <th class="d-none d-xl-table-cell">Duration</th>
                 <th>Plays</th>
                 <th class="d-none d-lg-table-cell">Last Played</th>
+                <th class="d-none d-lg-table-cell">Genre</th>
             </tr>
             </thead>
             <tbody class="table-group-divider">
@@ -49,11 +50,20 @@
                                  src="{% url 'album_art' album.songs.first.id %}"/> {{ album.name }}<br/>
                         </a>
                     </td>
-                    <td>{{ album.artist.name }}</td>
+                    <td>
+                        <a class="no-blue" href="#"
+                           hx-get="/artist/{{ album.artist.id }}/"
+                           hx-trigger="click"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            {{ album.artist.name }}
+                        </a>
+                    </td>
                     <td class="{% if album.total_tracks != album.count_songs %}bg-danger{% endif %}">{{ album.total_tracks }}</td>
                     <td class="d-none d-xl-table-cell">{{ album.total_length|dur }}</td>
                     <td>{{ album.count_played }}</td>
                     <td class="d-none d-lg-table-cell">{{ album.played_at|days_ago }}</td>
+                    <td class="d-none d-lg-table-cell">{% include 'main/snippet_genre.html' with facet='album' obj=album %}</td>
                 </tr>
             {% endfor %}
             </tbody>

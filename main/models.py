@@ -1,8 +1,11 @@
+from pathlib import Path
+
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 
 from main import managers
+from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK
 
 
 class Timestamp(models.Model):
@@ -24,7 +27,7 @@ class Rank:
         if rank is None:
             # Use self.__class__.objects to access the manager at the class level
             rank = self.__class__.objects.filter(rating__gt=self.rating).count() + 1
-            cache.set(cache_key, rank, timeout=7200)  # Cache for 2 hour
+            cache.set(cache_key, rank, timeout=3600)  # Cache for 1 hour
 
         return rank
 
@@ -33,14 +36,21 @@ class Artist(Timestamp, Rank):
     name = models.CharField(max_length=150, unique=True)
     slug = models.SlugField(unique=True)
 
-    total_length = models.FloatField()
     count_albums = models.IntegerField(default=0)
     count_songs = models.IntegerField(default=0)
+    total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
     played_at = models.DateTimeField(null=True)
     count_rated = models.IntegerField(default=0)
     rated_at = models.DateTimeField(null=True)
     rating = models.FloatField(default=0)
+
+    # classification
+    genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
+    disco_at = models.DateTimeField(null=True)
+
+    def __str__(self):
+        return f'<Artist-{self.id} {self.name}>'
 
 
 class Album(Timestamp, Rank):
@@ -51,13 +61,20 @@ class Album(Timestamp, Rank):
     total_discs = models.IntegerField()
     total_tracks = models.IntegerField()
 
-    total_length = models.FloatField()
+    # metadata
     count_songs = models.IntegerField(default=0)
+    total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
     played_at = models.DateTimeField(null=True)
     count_rated = models.IntegerField(default=0)
     rated_at = models.DateTimeField(null=True)
     rating = models.FloatField(default=0)
+
+    # classification
+    genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
+
+    def __str__(self):
+        return f'<Album-{self.id} {self.name} {self.artist.name}>'
 
 
 class Song(Timestamp, Rank):
@@ -79,12 +96,19 @@ class Song(Timestamp, Rank):
     rated_at = models.DateTimeField(null=True)
     rating = models.FloatField(default=0)
 
+    # classification
+    genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
+
     # managers
     objects = managers.SongManager()
 
     def __str__(self):
         """Get str."""
         return f'<Song-{self.id} {self.name} {self.artist.name}>'
+
+    def file_path(self) -> Path:
+        """Get audio file path."""
+        return settings.MUSIC_DIR / self.rel_path
 
     def file_exists(self) -> bool:
         """Checks if audio file exists and can be played."""
@@ -109,4 +133,30 @@ class Rating(Timestamp):
     rated_at = models.DateTimeField()
 
     def __str__(self):
+        """Get rating."""
         return f'<Rating-{self.id} {self.winner.name} >>> {self.loser.name}>'
+
+
+class Billboard(Timestamp):
+    chart = models.CharField(max_length=250, choices=BILLBOARD_CHOICES)
+    chart_at = models.DateTimeField()
+    pos = models.IntegerField()
+    img_src = models.CharField(max_length=250)
+    artist_name = models.CharField(max_length=250)
+    artist_slug = models.SlugField()
+    album_name = models.CharField(max_length=250)
+    album_slug = models.SlugField()
+    last_week = models.IntegerField(null=True)
+    peak_pos = models.IntegerField()
+    wks_on_chart = models.IntegerField()
+
+    # meta
+    scraped_at = models.DateTimeField()
+    finished = models.BooleanField(default=False)
+
+    class Meta:
+        unique_together = ['chart', 'artist_slug', 'album_slug']
+        ordering = ['chart_at', 'pos']
+
+    def __str__(self):
+        return f'<Billboard-{self.id} {self.chart} {self.artist_name} {self.album_name}>'

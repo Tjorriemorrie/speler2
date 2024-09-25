@@ -31,6 +31,7 @@
 
 .title-font {
     font-family: 'Calligraffiti', cursive;
+    line-height: 1.8em;
 }
 
 .album-font {
@@ -46,7 +47,7 @@
 }
 
 table {
-    font-family: 'Helvetica Neue', Arial, sans-serif;
+    font-family: Tahoma, 'Helvetica Neue', Arial, sans-serif;
 }
 
 
@@ -99,12 +100,9 @@ html {
     display: block;
     line-height: 0;
     padding-left: 0.1em;
-    margin-top: -0.4em;
+    margin-top: -0.9em;
 }
 
-#songData .title-font {
-    margin-top: 0.4em;
-}
 
 /************************** NAVIGATION ***********************************/
 
@@ -208,7 +206,9 @@ a.nav-link.skip-control {
 }
 
 .av-center img {
-    height: 5em;
+    height: 6em;
+    width: 6em;
+    object-fit: contain;
     margin: 0;
     padding: 0;
 }
@@ -305,6 +305,30 @@ a.nav-link.skip-control {
 /* Optional: Adjust card border radius if needed */
 .card {
     border-radius: 0.375rem; /* Rounded corners */
+}
+
+/************************** BILLBOARD ***********************************/
+
+.billboard-table img {
+    width: 3em;
+    height: 3em;
+    object-fit: cover;
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .billboard-table img {
+        width: 4em;
+        height: 4em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .billboard-table img {
+        width: 5em;
+        height: 5em;
+    }
 }
 
 /**************************  ***********************************/
@@ -404,5 +428,27 @@ a.play-icon {
 .no-blue {
     text-decoration: none !important;
     font-style: normal !important;
-    color: #333;
+    color: inherit;
+}
+
+
+.ellipsis {
+    max-width: 20em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .ellipses {
+        max-width: 30em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .ellipses {
+        max-width: 40em;
+    }
 }

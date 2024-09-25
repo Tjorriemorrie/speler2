@@ -1,6 +1,6 @@
 from django.contrib import admin
 
-from main.models import Album, Artist, History, Song
+from main.models import Album, Artist, Billboard, History, Song
 
 
 @admin.register(Artist)
@@ -30,8 +30,9 @@ class SongAdmin(admin.ModelAdmin):
         'track_number',
         'count_played',
         'played_at',
+        'rel_path',
     )
-    search_fields = ('name', 'album__name', 'album_artist_name')
+    search_fields = ('name', 'album__name', 'artist__name')
 
     @admin.display()
     def album_name(self, song: Song):
@@ -41,7 +42,7 @@ class SongAdmin(admin.ModelAdmin):
     @admin.display()
     def artist_name(self, song: Song):
         """Get artist name."""
-        return song.album.artist.name
+        return song.artist.name
 
 
 @admin.register(History)
@@ -52,3 +53,17 @@ class HistoryAdmin(admin.ModelAdmin):
     def song_name(self, history: History):
         """Get song name."""
         return history.song.name
+
+
+@admin.register(Billboard)
+class BillboardAdmin(admin.ModelAdmin):
+    list_display = (
+        'chart',
+        'chart_at',
+        'artist_name',
+        'album_name',
+        'pos',
+        'last_week',
+        'peak_pos',
+        'wks_on_chart',
+    )

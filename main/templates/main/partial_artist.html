@@ -3,10 +3,22 @@
     <div class="col text-center">
 
         <h3 class="artist-font fs-2 my-3">
+            <a class="play-icon"
+               href="#"
+               hx-get="/next-song/?demand=artist_{{ artist.id }}"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                <i class="bi bi-play-circle"></i>
+            </a>
             {{ artist.name }}
-            <br/>
-            <sub>#{{ artist.rank }}</sub>
         </h3>
+        <p>
+            <span class="me-3"><strong>#{{ artist.rank }}</strong></span>
+            <a class="no-blue" href="{% url 'update_disco_view' artist_id=artist.id %}" target="_blank">
+                <i class="bi bi-wikipedia"></i>
+            </a>
+            {% include 'main/snippet_genre.html' with facet='artist' obj=artist %}
+        </p>
 
         <div class="container">
             <div class="row">
@@ -31,7 +43,7 @@
                                         <br/>
                                         <sub>#{{ album.rank }}</sub>
                                     </h5>
-                                    <p class="card-text">{{ album.rating|perc }}%</p>
+                                    <p class="card-text">{{ album.rating|perc }}</p>
                                 </div>
 
                                 <div class="card-footer">

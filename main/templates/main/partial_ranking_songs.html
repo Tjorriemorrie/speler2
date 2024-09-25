@@ -21,7 +21,8 @@
                 <th>Album</th>
                 <th class="d-none d-xl-table-cell">Duration</th>
                 <th class="d-none d-lg-table-cell">Plays</th>
-                <th class="d-none d-lg-table-cell">Last Played</th>
+                <th class="d-none d-xl-table-cell">Last Played</th>
+                <th class="d-none d-lg-table-cell">Genre</th>
             </tr>
             </thead>
             <tbody class="table-group-divider">
@@ -36,7 +37,7 @@
                     <td class="d-none d-lg-table-cell">
                         {% iconrank song.rating 5 max_rating min_rating %}
                     </td>
-                    <td>
+                    <td class="ellipses">
                         <a class="play-icon"
                            href="#"
                            hx-get="/next-song/?demand=song_{{ song.id }}"
@@ -47,7 +48,15 @@
                         <span class="text-muted small">{{ song.track_number }}</span>
                         {{ song.name }}
                     </td>
-                    <td>{{ song.artist.name }}</td>
+                    <td>
+                        <a class="no-blue" href="#"
+                           hx-get="/artist/{{ song.artist.id }}/"
+                           hx-trigger="click"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            {{ song.artist.name }}
+                        </a>
+                    </td>
                     <td>
                         <a hx-get="{% url 'album' album_id=song.album.id %}"
                            hx-target="#main-container">
@@ -57,7 +66,8 @@
                     </td>
                     <td class="d-none d-xl-table-cell">{{ song.track_length|dur }}</td>
                     <td class="d-none d-lg-table-cell">{{ song.count_played }}</td>
-                    <td class="d-none d-lg-table-cell">{{ song.played_at|days_ago }}</td>
+                    <td class="d-none d-xl-table-cell">{{ song.played_at|days_ago }}</td>
+                    <td class="d-none d-lg-table-cell">{% include 'main/snippet_genre.html' with facet='song' obj=song %}</td>
                 </tr>
             {% endfor %}
             </tbody>

@@ -1,5 +1,5 @@
 {% load fmt %}
-<div class="row">
+<div class="row" hx-get="/album/{{ album.id }}/" hx-trigger="refreshAlbum from:body" hx-swap="outerHTML">
 
     <!------------ LYRICS ------------->
     <div class=" d-none col-lg-3 d-lg-block box-lyrics" id="lyrics-container">
@@ -27,22 +27,39 @@
             <div class="col-auto text-center d-flex flex-grow-1 justify-content-center av-center align-items-center">
                 <div class="text-center me-3">
                     <p>{{ album.year }}</p>
-                    <img class="img-fluid" src="{% url 'album_art' album.songs.first.id %}"
+                    <img class="" src="{% url 'album_art' album.songs.first.id %}"
                          alt="Album Art"/>
                     <p>#{{ album.rank }}</p>
                 </div>
                 <div class="text-start">
                     <h5 class="artist-font">
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=artist_{{ album.artist.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
                         <a class="no-blue" href="#"
                            hx-get="/artist/{{ album.artist.id }}/"
                            hx-trigger="click"
                            hx-target="#main-container"
                            hx-swap="innerHTML">
-                        {{ album.artist.name }}
+                            {{ album.artist.name }}
                         </a>
                         <span>#{{ album.artist.rank }}</span>
                     </h5>
-                    <h5 class="album-font">{{ album.name }}</h5>
+                    <h5 class="album-font">
+                        <a class="play-icon"
+                           href="#"
+                           hx-get="/next-song/?demand=album_{{ album.id }}"
+                           hx-target="#player-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-play-circle"></i>
+                        </a>
+                        {{ album.name }}
+                    </h5>
+                    <p>{% include 'main/snippet_genre.html' with facet='album' obj=album refresh='album' %}</p>
                 </div>
             </div>
 
@@ -70,6 +87,7 @@
                         <th>Duration</th>
                         <th>Plays</th>
                         <th class="d-none d-lg-table-cell">Last Played</th>
+                        <th>Genre</th>
                     </tr>
                     </thead>
                     <tbody class="table-group-divider">
@@ -82,7 +100,7 @@
                             </td>
                             <td>{% iconrank song.rating 5 1 0 %}</td>
                             <td>{{ song|trck }}</td>
-                            <td>
+                            <td class="ellipsis">
                                 <a class="play-icon" href="#" style="font-size: 0.8em;"
                                    hx-get="/lyrics/{{ song.id }}/"
                                    hx-target="#lyrics-container"
@@ -101,6 +119,7 @@
                             <td>{{ song.track_length|dur }}</td>
                             <td>{{ song.count_played }}</td>
                             <td class="d-none d-lg-table-cell">{{ song.played_at|days_ago }}</td>
+                            <td>{% include 'main/snippet_genre.html' with facet='song' obj=song %}</td>
                         </tr>
                     {% endfor %}
                     </tbody>

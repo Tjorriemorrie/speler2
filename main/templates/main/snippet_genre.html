@@ -1,0 +1,62 @@
+{% load fmt %}
+<div id="{{ facet }}-{{ obj.id }}-genre" class="dropdown">
+
+    {% if message %}
+        {{ message }}
+
+    {% elif obj %}
+
+        <a class="dropdown-toggle no-blue" href="#" id="genreDropdown" data-bs-toggle="dropdown"
+           aria-expanded="false">
+            {{ obj.genre }}
+            {% if success %}
+                <i class="bi bi-check2"></i>
+            {% endif %}
+        </a>
+
+        <ul class="dropdown-menu" aria-labelledby="genreDropdown">
+            <li>
+                <a class="dropdown-item no-blue" href="#"
+                   hx-get="/genre/{{ facet }}/{{ obj.id }}/christian/{% if refresh %}?refresh={{ refresh }}{% endif %}"
+                   hx-target='#{{ facet }}-{{ obj.id }}-genre'
+                   hx-swap="innerHTML">
+                    christian
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item no-blue" href="#"
+                   hx-get="/genre/{{ facet }}/{{ obj.id }}/pop and dance/{% if refresh %}?refresh={{ refresh }}{% endif %}"
+                   hx-target='#{{ facet }}-{{ obj.id }}-genre'
+                   hx-swap="innerHTML">
+                    pop and dance
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item no-blue" href="#"
+                   hx-get="/genre/{{ facet }}/{{ obj.id }}/soft rock/{% if refresh %}?refresh={{ refresh }}{% endif %}"
+                   hx-target='#{{ facet }}-{{ obj.id }}-genre'
+                   hx-swap="innerHTML">
+                    soft rock
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item no-blue" href="#"
+                   hx-get="/genre/{{ facet }}/{{ obj.id }}/hard rock/{% if refresh %}?refresh={{ refresh }}{% endif %}"
+                   hx-target='#{{ facet }}-{{ obj.id }}-genre'
+                   hx-swap="innerHTML">
+                    hard rock
+                </a>
+            </li>
+            <li>
+                <a class="dropdown-item no-blue" href="#"
+                   hx-get="/genre/{{ facet }}/{{ obj.id }}/metal/{% if refresh %}?refresh={{ refresh }}{% endif %}"
+                   hx-target='#{{ facet }}-{{ obj.id }}-genre'
+                   hx-swap="innerHTML">
+                    metal
+                </a>
+            </li>
+        </ul>
+
+    {% endif %}
+
+</div>

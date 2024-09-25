@@ -1,11 +1,13 @@
 import logging
 from pathlib import Path
+from typing import List
 
 from django.conf import settings
-from django.db import transaction
-from django.db.models import Sum
+from django.db import IntegrityError, transaction
+from django.db.models import Avg, Max, Sum
 from django.utils.text import slugify
 from mutagen import id3, mp3, mp4
+from unidecode import unidecode
 
 from main.models import Album, Artist, Song
 
@@ -14,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 def scan_directory(*args, **kwargs):
     """Scan directory."""
-    validate_songs()
+    missing_audio_songs = validate_songs(delete=False)
 
     logger.info(f'Scanning {settings.MUSIC_DIR}')
 
@@ -37,9 +39,9 @@ def scan_directory(*args, **kwargs):
                 continue
             cnt += 1
             rel_path = file_path.relative_to(settings.MUSIC_DIR).as_posix()
-            slug = slugify(rel_path)
+            slug = slugify(unidecode(rel_path))
             if slug not in existing_slugs:
-                song = add_new_audio_file(file_path, rel_path, slug)
+                song = add_new_audio_file(file_path, rel_path, slug, missing_audio_songs)
                 albums.add(song.album)
         logger.info(f'Found {cnt} {pattern} files in directory')
 
@@ -61,13 +63,29 @@ def scan_directory(*args, **kwargs):
         )
         artist.save()
 
+    validate_songs()
 
-def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
+
+def add_new_audio_file(
+    file_path: Path, rel_path: str, song_slug: str, missing_audio_files: List[Song]
+) -> Song:
     """Add new Artist, Album and Song after parsing ID3 metadata."""
     logger.info(f'Adding new {file_path}')
     metadata = parse_id3_tag(file_path.resolve())
 
-    artist_slug = slugify(metadata['artist_name'])
+    # check if song file is renamed
+    for bad_song in missing_audio_files:
+        same_artist = bad_song.artist.name == metadata['artist_name']
+        same_album = bad_song.album.name == metadata['album_name']
+        song_name = bad_song.name == metadata['song_title']
+        if same_artist and same_album and song_name:
+            bad_song.slug = song_slug
+            bad_song.rel_path = rel_path
+            bad_song.save()
+            logger.info(f'Song renamed! {bad_song} now at {rel_path}')
+            return bad_song
+
+    artist_slug = slugify(unidecode(metadata['artist_name']))
     artist, artist_created = Artist.objects.update_or_create(
         slug=artist_slug,
         defaults={
@@ -78,7 +96,7 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
     if artist_created:
         logger.info(f'Created {artist}')
 
-    album_slug = artist_slug + '-' + slugify(metadata['album_name'])
+    album_slug = artist_slug + '-' + slugify(unidecode(metadata['album_name']))
     album, album_created = Album.objects.update_or_create(
         slug=album_slug,
         defaults={
@@ -88,22 +106,32 @@ def add_new_audio_file(file_path: Path, rel_path: str, song_slug: str) -> Song:
             'total_tracks': metadata['total_tracks'],
             'total_discs': metadata['total_discs'],
             'total_length': 0,
+            'genre': artist.genre,
         },
     )
     if album_created:
         logger.info(f'Created {album_created}')
 
-    song = Song.objects.create(
-        artist=artist,
-        album=album,
-        rel_path=rel_path,
-        slug=song_slug,
-        name=metadata['song_title'],
-        disc_number=metadata['disc_number'],
-        track_number=metadata['track_number'],
-        track_length=metadata['track_length'],
-    )
-    logger.info(f'Created {song}')
+    try:
+        song = Song.objects.create(
+            artist=artist,
+            album=album,
+            rel_path=rel_path,
+            slug=song_slug,
+            name=metadata['song_title'],
+            disc_number=metadata['disc_number'],
+            track_number=metadata['track_number'],
+            track_length=metadata['track_length'],
+            genre=artist.genre,
+        )
+        logger.info(f'Created {song}')
+    except IntegrityError as exc:
+        if 'main_song.rel_path' not in str(exc):
+            raise
+        song = Song.objects.get(rel_path=rel_path)
+        song.slug = song_slug
+        song.save()
+        logger.info(f'Updated song slug to: {song_slug}')
 
     return song
 
@@ -162,16 +190,19 @@ def get_m4a_metadata(file_path) -> dict:
     return info
 
 
-def validate_songs():
+def validate_songs(delete: bool = True) -> List[Song]:
     """Ensure songs in db has files."""
     logger.info('Validating songs...')
+    listing = []
     songs = Song.objects.all()
 
     with transaction.atomic():
         for song in songs:
             if not song.file_exists():
-                logger.info(f'Removing bad song {song}')
-                song.delete()
+                listing.append(song)
+                logger.info(f'{"Removing" if delete else "Found"} bad song {song}')
+                if delete:
+                    song.delete()
 
         # Remove albums with no songs left
         albums = Album.objects.all()
@@ -187,6 +218,8 @@ def validate_songs():
                 logger.info(f'Removing artist {artist} with no albums')
                 artist.delete()
 
+    return listing
+
 
 def get_album_art(song: Song):
     """Get album art from metadata."""
@@ -195,3 +228,117 @@ def get_album_art(song: Song):
     for tag in audio_file.tags.values():
         if tag.FrameID == 'APIC':  # APIC frame stores album artwork
             return tag
+
+
+def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
+    """Checks metadata of songs."""
+    outdated_albums = set()
+    for song in Song.objects.all():
+        metadata = parse_id3_tag(song.file_path().resolve())
+        song_dirty = False
+        album_dirty = False
+
+        artist_slug = slugify(unidecode(metadata['artist_name']))
+        if song.artist.slug != artist_slug:
+            # check if existing artist exists since slug is unique
+            # then switch to that artist,
+            # otherwise it can just be changed
+            try:
+                existing_artist = Artist.objects.get(slug=artist_slug)
+                logger.info(f'Switching artist to {existing_artist} from {song.artist}')
+                song.artist = existing_artist
+                song_dirty = True
+            except Artist.DoesNotExist:
+                logger.info(f'Renaming artist to {metadata["artist_name"]} from {song.artist}')
+                song.artist.slug = artist_slug
+                song.artist.name = metadata['artist_name']
+                song.artist.save()
+
+        album_slug = artist_slug + '-' + slugify(unidecode(metadata['album_name']))
+        if song.album.slug != album_slug:
+            # this will always be different if artist was updated,
+            # otherwise the album was changed and not the artist
+            try:
+                existing_album = Album.objects.get(slug=album_slug)
+                logger.info(f'Switching album to {existing_album} from {song.album}')
+                song.album = existing_album
+                song_dirty = True
+            except Album.DoesNotExist:
+                logger.info(f'Renaming album to {metadata["album_name"]} from {song.album}')
+                song.album.artist = song.artist
+                song.album.slug = album_slug
+                song.album.name = metadata['album_name']
+                album_dirty = True
+
+        # check album metadata
+        if song.album.year != metadata['year']:
+            song.album.year = metadata['year']
+            album_dirty = True
+
+        if song.album.total_tracks != metadata['total_tracks']:
+            song.album.total_tracks = metadata['total_tracks']
+            album_dirty = True
+
+        if song.album.total_discs != metadata['total_discs']:
+            song.album.total_discs = metadata['total_discs']
+            album_dirty = True
+
+        if album_dirty:
+            logger.info(f'Dirty album: {song.album}')
+            song.album.save()
+
+        # check song metadata
+        if song.name != metadata['song_title']:
+            song.name = metadata['song_title']
+            song_dirty = True
+
+        if song.disc_number != metadata['disc_number']:
+            song.disc_number = metadata['disc_number']
+            song_dirty = True
+
+        if song.track_number != metadata['track_number']:
+            song.track_number = metadata['track_number']
+            song_dirty = True
+
+        if song.track_length != metadata['track_length']:
+            song.track_length = metadata['track_length']
+            song_dirty = True
+
+        if song_dirty:
+            logger.info(f'Dirty song: {song}')
+            song.save()
+
+        if album_dirty or song_dirty:
+            outdated_albums.add(song.album)
+
+    # update stats on albums
+    outdated_artists = set()
+    for album in outdated_albums:
+        album.refresh_from_db()
+        album.count_songs = album.songs.count()
+        album.total_length = album.songs.aggregate(Sum('track_length'))['track_length__sum']
+        album.count_played = album.songs.aggregate(Sum('count_played'))['count_played__sum']
+        album.played_at = album.songs.aggregate(Max('played_at'))['played_at__max']
+        album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
+        album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
+        album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
+        album.save()
+        logger.info(f'Updated stats for {album}')
+        outdated_artists.add(album.artist)
+
+    # update stats on artists
+    for artist in outdated_artists:
+        artist.refresh_from_db()
+        artist.count_albums = artist.albums.count()
+        artist.count_songs = artist.songs.count()
+        artist.total_length = artist.albums.aggregate(Sum('total_length'))['total_length__sum']
+        artist.count_played = artist.albums.aggregate(Sum('count_played'))['count_played__sum']
+        artist.played_at = artist.albums.aggregate(Max('played_at'))['played_at__max']
+        artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
+        artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
+        artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
+        logger.info(f'Updated stats for {artist}')
+        artist.save()
+
+    # ensure to remove dud artists or albums that could be orphans
+    validate_songs()

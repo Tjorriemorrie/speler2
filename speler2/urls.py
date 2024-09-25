@@ -31,4 +31,7 @@ urlpatterns = [
     path('ranking/<str:facet>/', views.ranking_view, name='ranking'),
     path('year/', views.year_view, name='year'),
     path('lyrics/<int:song_id>/', views.lyrics_view, name='lyric_txt'),
+    path('genre/<str:facet>/<int:facet_id>/<str:genre>/', views.genre_view, name='genre'),
+    path('billboards/', views.billboards_view, name='billboards'),
+    path('update-disco/<int:artist_id>/', views.update_disco_view, name='update_disco_view'),
 ]

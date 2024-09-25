@@ -11,8 +11,7 @@ from main.models import History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
-RATINGS_PER_PLAY = 3
-RATINGS_RATIO = 0.7
+RATINGS_PER_PLAY = 5
 RATINGS_WINDOW = 60 * 30  # minutes
 
 
@@ -29,7 +28,7 @@ def get_recent_songs_from_history() -> List[Song]:
 
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
-    rate_count_cut_off = (current_song.count_played + RATINGS_RATIO) * RATINGS_PER_PLAY
+    rate_count_cut_off = (current_song.count_played * RATINGS_PER_PLAY) + 1
     logger.info(f'Get match: is rated {current_song.count_rated} < {rate_count_cut_off}')
     if current_song.count_rated >= rate_count_cut_off:
         return

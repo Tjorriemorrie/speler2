@@ -1,4 +1,10 @@
 $(document).ready(function () {
+    // htmx.logger = function (elt, event, data) {
+    //     if (console) {
+    //         console.log(event, elt, data);
+    //     }
+    // }
+
     // Initialize the player once
     const $audioElement = $('audio.plyr');
     const player = new Plyr($audioElement[0], {autoplay: false});
@@ -45,7 +51,7 @@ $(document).ready(function () {
             // Set the volume based on song rating
             // Scale rating from [0, 1] to [0.3, 0.7]
             let rating = $('#songData').data('rating');
-            const newMax = 0.7;
+            const newMax = 0.5;
             const newMin = 0.1;
             let volume = (((rating - 0) * (newMax - newMin)) / (1 - 0)) + newMin
             player.volume = volume;
@@ -53,7 +59,7 @@ $(document).ready(function () {
 
             // Play the audio
             player.play().catch(function (error) {
-                alert('Enable autoplay in the URL bar.');
+                console.log('Enable autoplay in the URL bar.');
             });
 
             // Set the page title to the song's name
@@ -69,6 +75,23 @@ $(document).ready(function () {
             });
         }
     });
+
+
+    // Add event listener for when the dropdown is hidden
+    document.getElementById('checkboxDropdown').addEventListener('hidden.bs.dropdown', function () {
+        console.log('Dropdown has been hidden');
+        // Gather selected options
+        const selectedOptions = Array.from(document.querySelectorAll('#filterChoices input[type="checkbox"]:checked'))
+            .map(input => input.value)
+            .join(',');
+
+        const queryString = new URLSearchParams({filters: selectedOptions}).toString();
+        htmx.ajax('GET', `/next-song/?${queryString}`, {
+            target: '#player-container',
+            swap: 'innerHTML'
+        });
+    });
+
 
     $(document).on('keydown', function (event) {
         // Add event listener for spacebar to pause/resume playback

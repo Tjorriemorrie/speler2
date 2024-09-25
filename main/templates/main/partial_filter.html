@@ -1,0 +1,49 @@
+<li class="nav-item dropdown me-3">
+    <a class="nav-link dropdown-toggle" href="#" id="checkboxDropdown" role="button"
+       data-bs-toggle="dropdown" aria-expanded="false">
+        <i class="bi bi-filter-square-fill"></i>
+        <span class="d-none d-xl-inline">Genres</span>
+    </a>
+    <ul id="genreChoices" class="dropdown-menu" aria-labelledby="checkboxDropdown">
+        <li>
+            <a class="dropdown-item" href="#"
+               hx-get="/next-song/?genre=christian"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                Christian
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="#"
+               hx-get="/next-song/?genre=pop and dance"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                Pop and Dance
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="#"
+               hx-get="/next-song/?genre=soft rock"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                Soft Rock
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="#"
+               hx-get="/next-song/?genre=hard rock"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                Hard Rock
+            </a>
+        </li>
+        <li>
+            <a class="dropdown-item" href="#"
+               hx-get="/next-song/?genre=metal"
+               hx-target="#player-container"
+               hx-swap="innerHTML">
+                Metal
+            </a>
+        </li>
+    </ul>
+</li>

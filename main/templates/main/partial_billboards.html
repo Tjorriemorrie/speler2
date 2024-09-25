@@ -1,0 +1,66 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <h3>Billboards</h3>
+
+        <h5 class="my-3">
+            Check up on
+            <a class="no-blue artist-font" href="#"
+               hx-get="/artist/{{ artist.id }}/"
+               hx-trigger="click"
+               hx-target="#main-container"
+               hx-swap="innerHTML">
+                {{ artist.name }}
+            </a>{% if artist.disco_at %} last checked {{ artist.disco_at }}{% endif %}
+        </h5>
+
+        <table class="table table-striped table-hover billboard-table mt-1">
+            <thead>
+            <tr>
+                <th>Chart</th>
+                <th>Week</th>
+                <th>Pos</th>
+                <th>Prev</th>
+                <th>Album</th>
+                <th>Weeks</th>
+                <th>Peak</th>
+                <th></th>
+            </tr>
+            </thead>
+            <tbody>
+            {% for billboard in billboards %}
+                <tr>
+                    <td>{{ billboard.chart }}</td>
+                    <td>{{ billboard.chart_at|date:"d M" }}</td>
+                    <td>{{ billboard.pos }}</td>
+                    <td>{{ billboard.last_week }}</td>
+                    <td class="{% if billboard.found %}bg-danger{% endif %}">
+                        <a class="no-blue" target="_blank"
+                           href="https://www.wikipedia.org/w/index.php?search={{ billboard.artist_name }} {{ billboard.album_name }}">
+                            <div class="d-flex align-items-center">
+                                <img src="{{ billboard.img_src }}" alt="Album cover" class="me-3"/>
+                                <div>
+                                    <div class="fw-bold">{{ billboard.artist_name }}</div>
+                                    <div>{{ billboard.album_name }}</div>
+                                </div>
+                            </div>
+                        </a>
+                    </td>
+                    <td>{{ billboard.wks_on_chart }}</td>
+                    <td>{{ billboard.peak_pos }}</td>
+                    <td>
+                        <a class="no-blue"
+                           href="#"
+                           hx-get="/billboards/?finished={{ billboard.id }}"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            <i class="bi bi-download"></i>
+                        </a>
+                    </td>
+                </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+</div>

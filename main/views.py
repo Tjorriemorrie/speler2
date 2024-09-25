@@ -1,19 +1,25 @@
 import logging
 from pathlib import Path
 
+import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db.models import Avg, Count
+from django.db.models import Avg, Count, F
 from django.http import Http404, HttpResponse
-from django.shortcuts import get_object_or_404, render
+from django.shortcuts import get_object_or_404, redirect, render
+from django.utils import timezone
 from django.utils.cache import patch_cache_control
+from django.utils.http import urlencode
+from django.utils.text import slugify
+from unidecode import unidecode
 
-from main.lyrics import search_azlyrics
-from main.models import Album, Artist, Song
+from main.constants import GENRE_CHOICES
+from main.lyrics import scrape_billboards, search_azlyrics
+from main.models import Album, Artist, Billboard, Song
 from main.musicfiles import get_album_art, validate_songs
-from main.plays import get_next_song, set_played
+from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 
 logger = logging.getLogger(__name__)
@@ -25,7 +31,7 @@ def home_view(request: WSGIRequest):
     return render(request, 'main/home.html', ctx)
 
 
-def next_song_view(request: WSGIRequest):
+def next_song_view(request: WSGIRequest):  # noqa: PLR0912
     """Return next song."""
     last_song_id = request.session.get('song_id')
     if last_song_id:
@@ -38,7 +44,7 @@ def next_song_view(request: WSGIRequest):
 
     next_song = None
 
-    # demands and facet filters
+    # demands facet filters
     if request.GET.get('remove_facet'):
         cache.delete('filter_facet')
     if demand := request.GET.get('demand'):
@@ -50,6 +56,15 @@ def next_song_view(request: WSGIRequest):
             facet_class = globals().get(dem_type.title())
             facet_ins = get_object_or_404(facet_class, id=dem_id)
             cache.set('filter_facet', {dem_type: facet_ins}, timeout=None)
+
+    # filters of genres
+    if request.GET.get('remove_genre'):
+        cache.delete('filter_genres')
+    if genre := request.GET.get('genre'):
+        valid_genres = [genre[0] for genre in GENRE_CHOICES]
+        if genre and genre not in valid_genres:
+            return HttpResponse(f'Invalid genre selected: {genre}', status=400)
+        handle_genre_filter(genre)
 
     # normal priority queue
     if not next_song:
@@ -68,9 +83,16 @@ def next_song_view(request: WSGIRequest):
         filter_value = next(iter(filter_facet.values()))  # Get the first value
     else:
         filter_value = None
+    # Check if filter_genre is not None and has at least one item
+    if filter_genres := cache.get('filter_genres'):
+        genre_values = ', '.join(filter_genres['genre__in'])
+    else:
+        genre_values = None
+
     ctx = {
         'song': next_song,
         'filter_value': filter_value,
+        'genre_values': genre_values,
     }
     response = render(request, 'main/partial_song_player.html', ctx)
 
@@ -91,9 +113,9 @@ def next_rating_view(request: WSGIRequest):
 
     response = render(request, 'main/partial_song_rating.html', {'match': match})
 
-    # Set the HX-Trigger header to load matches
     if not match:
-        response['HX-Trigger'] = 'loadAlbumView'
+        # Set the HX-Trigger header to reload album view with ratings on it
+        response['HX-Trigger'] = 'refreshAlbum'
 
     return response
 
@@ -162,7 +184,7 @@ def album_view(request, album_id):
 def artist_view(request: WSGIRequest, artist_id: int) -> HttpResponse:
     """Get artist details."""
     artist = get_object_or_404(Artist, id=artist_id)
-    albums = artist.albums.order_by('-rating').all()
+    albums = artist.albums.order_by('year').all()
     ctx = {
         'artist': artist,
         'albums': albums,
@@ -189,7 +211,7 @@ def ranking_view(request, facet):
     objs = query.order_by('-rating', '-count_played', '-count_rated').all()
 
     # Add pagination logic
-    paginator = Paginator(objs, 30)  # 10 items per page
+    paginator = Paginator(objs, 110)
     page = request.GET.get('page')
 
     try:
@@ -246,14 +268,105 @@ def lyrics_view(request, song_id: int):
     if not use_cache:
         logger.info(f'Fetching lyrics without cache for {song_id}!')
     song = get_object_or_404(Song, id=song_id)
-    # lyrics = get_lyrics_chartlyrics(song, use_cache)
-    lyrics = search_azlyrics(song, use_cache)
+
+    try:
+        lyrics = search_azlyrics(song, use_cache)
+    except (requests.RequestException, ValueError) as exc:
+        return HttpResponse(str(exc))
+
     ctx = {
         'lyrics': lyrics,
         'current_song_id': request.session.get('song_id'),
         'use_cache': use_cache,
     }
     response = render(request, 'main/partial_lyrics.html', ctx)
-    if use_cache:
-        patch_cache_control(response, public=True, max_age=86400)
+    patch_cache_control(response, public=True, max_age=86400)
     return response
+
+
+def genre_view(request, facet: str, facet_id: int, genre: str):
+    """Set genre of artist, album or song."""
+    # Check if facet class exists, otherwise return a string message
+    facet_class = globals().get(facet.title())
+    if not facet_class:
+        return render(request, 'main/snippet_genre.html', {'message': f'Invalid facet: {facet}'})
+
+    # Get the facet instance or return a string message if not found
+    try:
+        facet_ins = facet_class.objects.get(id=facet_id)
+    except facet_class.DoesNotExist:
+        return render(
+            request,
+            'main/snippet_genre.html',
+            {'message': f'{facet.title()} with ID {facet_id} not found.'},
+        )
+
+    # Validate the genre choice
+    genre = genre.casefold()
+    if genre not in [g[0] for g in GENRE_CHOICES]:
+        return render(
+            request, 'main/snippet_genre.html', {'message': f'Invalid genre choice: {genre}'}
+        )
+
+    # Set the genre and render success
+    set_genre(facet_ins, genre)
+    response = render(
+        request,
+        'main/snippet_genre.html',
+        {
+            'obj': facet_ins,
+            'success': True,
+        },
+    )
+
+    if refresh := request.GET.get('refresh'):
+        # Set the HX-Trigger header to load matches
+        response['HX-Trigger'] = f'refresh{refresh.title()}'
+
+    return response
+
+
+def billboards_view(request):
+    """Get artist to review and new bands from billboards."""
+    if finished_id := request.GET.get('finished'):
+        billboard = get_object_or_404(Billboard, id=finished_id)
+        billboard.finished = True
+        billboard.save()
+
+    artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True)).first()
+
+    if not request.session.get('billboards'):
+        scrape_billboards()
+        request.session['billboards'] = True
+
+    billboards = Billboard.objects.exclude(finished=True).all()
+    artist_slugs = Artist.objects.values_list('slug', flat=True)
+    for billboard in billboards:
+        billboard.found = billboard.artist_slug in artist_slugs
+
+    ctx = {
+        'artist': artist,
+        'billboards': billboards,
+    }
+    response = render(request, 'main/partial_billboards.html', ctx)
+    # patch_cache_control(response, public=True, max_age=86400)
+    return response
+
+
+def update_disco_view(request, artist_id: int):
+    """Set disco and go to discography."""
+    # Fetch the artist object based on the artist_id
+    artist = get_object_or_404(Artist, id=artist_id)
+
+    # Update the disco_at field with the current time
+    artist.disco_at = timezone.now()
+    artist.save()
+
+    # Prepare the search parameters for the Wikipedia URL
+    artist_name = slugify(unidecode(artist.name))
+    params = {'search': f'{artist_name.replace("-", "_")}_discography'}
+
+    # Build the Wikipedia URL with encoded parameters
+    url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
+
+    return redirect(url)
