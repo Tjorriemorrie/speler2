@@ -31,7 +31,9 @@
 
 .title-font {
     font-family: 'Calligraffiti', cursive;
-    line-height: 1.8em;
+    line-height: 2em;
+    padding-left: 0.17em;
+    margin-left: -0.17em;
 }
 
 .album-font {
@@ -48,6 +50,27 @@
 
 table {
     font-family: Tahoma, 'Helvetica Neue', Arial, sans-serif;
+}
+
+.ellipsis {
+    max-width: 20em;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .ellipses {
+        max-width: 30em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .ellipses {
+        max-width: 40em;
+    }
 }
 
 
@@ -429,26 +452,4 @@ a.play-icon {
     text-decoration: none !important;
     font-style: normal !important;
     color: inherit;
-}
-
-
-.ellipsis {
-    max-width: 20em;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-}
-
-/* Large LG > 992 */
-@media (min-width: 992px) {
-    .ellipses {
-        max-width: 30em;
-    }
-}
-
-/* Extra large XL > 1200 */
-@media (min-width: 1200px) {
-    .ellipses {
-        max-width: 40em;
-    }
 }

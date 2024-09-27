@@ -117,7 +117,9 @@
                                 {{ song.name }}
                             </td>
                             <td>{{ song.track_length|dur }}</td>
-                            <td>{{ song.count_played }}</td>
+                            <td>
+                                {% if not song.count_played %}new{% else %}{{ song.count_played }}{% endif %}
+                            </td>
                             <td class="d-none d-lg-table-cell">{{ song.played_at|days_ago }}</td>
                             <td>{% include 'main/snippet_genre.html' with facet='song' obj=song %}</td>
                         </tr>

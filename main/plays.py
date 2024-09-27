@@ -113,7 +113,7 @@ def get_next_song_priority_values() -> Tuple[float, float]:
 
     raw_sql = """
         SELECT
-            AVG(julianday(played_at)) AS avg_julian_day,
+            MIN(julianday(played_at)) AS earliest_julian_day,
             julianday('now') AS current_julian_day
         FROM main_song
     """
@@ -121,23 +121,26 @@ def get_next_song_priority_values() -> Tuple[float, float]:
     # Execute raw SQL
     with connection.cursor() as cursor:
         cursor.execute(raw_sql)
-        avg_julian_day, current_julian_day = cursor.fetchone()
-        logger.info(f'avg julian: {avg_julian_day}')
-        logger.info(f'cur julian: {current_julian_day}')
+        earliest_julian_day, current_julian_day = cursor.fetchone()
+        logger.info(f'earliest julian: {earliest_julian_day}')
+        logger.info(f'current julian: {current_julian_day}')
 
-    if avg_julian_day is None:
-        julian_till_avg = 1.0  # Default value if no data
+    if earliest_julian_day is None:
+        earliest_julian_day = 1.0  # Default value if no data
     else:
         # Calculate days since earliest Julian Day
-        julian_till_avg = current_julian_day - avg_julian_day
+        earliest_julian_day = current_julian_day - earliest_julian_day
 
         # Ensure the value is at least 1 to avoid division by zero
-        julian_till_avg = max(julian_till_avg, 1.0)
+        earliest_julian_day = max(earliest_julian_day, 1.0)
+
+    # make days_since half as valuable
+    earliest_julian_day *= 2.0
 
     # Cache the values for 2 hour (3600 seconds * 2)
-    cache.set(cache_key, (max_played, julian_till_avg), timeout=7200)
+    cache.set(cache_key, (max_played, earliest_julian_day), timeout=7200)
 
-    return max_played, julian_till_avg
+    return max_played, earliest_julian_day
 
 
 def set_genre(instance: Union[Artist, Album, Song], genre: str):

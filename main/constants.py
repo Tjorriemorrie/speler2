@@ -41,13 +41,17 @@ BILLBOARD_CHART_URLS = {
 
 AZLYRICS_ARTISTS = {
     'aperfectcircle': 'perfectcircle',
+    'matchboxtwenty': 'matchbox20',
+    'thirtysecondstomars': '30secondstomars',
     'u2': 'u2band',
 }
 
 AZLYRICS_SONGS = {
+    'astralromance': 'astralromance129996',  # nightwish
     'bettermanthecage': 'betterman',  # oasis
     'burningthemaps': 'burningthemap',  # better than ezra
     'gimmestitches': 'gimmiestitches',  # foo fighters
     'pinata': 'piata',  # chevelle
     'tumbleandfall': 'tumblefall',  # feeder
+    'voodoowitchhunt': 'voodoo',  # godsmack
 }
