@@ -5,13 +5,13 @@ from main.models import Album, Artist, Billboard, History, Song
 
 @admin.register(Artist)
 class ArtistAdmin(admin.ModelAdmin):
-    list_display = ('name', 'count_albums', 'count_songs', 'rating')
+    list_display = ('name', 'count_albums', 'count_songs', 'rating', 'avg_played_at')
     search_fields = ('name',)
 
 
 @admin.register(Album)
 class AlbumAdmin(admin.ModelAdmin):
-    list_display = ('name', 'rating', 'artist_name', 'year')
+    list_display = ('name', 'slug', 'rating', 'artist_name', 'year', 'avg_played_at')
     search_fields = ('name', 'artist__name')
 
     @admin.display()

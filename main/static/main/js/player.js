@@ -5,6 +5,11 @@ $(document).ready(function () {
     //     }
     // }
 
+    // Timezone settings
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+    document.cookie = "django_timezone=" + timezone;
+    console.log('Timezone set ', timezone)
+
     // Initialize the player once
     const $audioElement = $('audio.plyr');
     const player = new Plyr($audioElement[0], {autoplay: false});

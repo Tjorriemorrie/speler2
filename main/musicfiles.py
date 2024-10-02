@@ -1,11 +1,14 @@
 import logging
+from datetime import datetime
 from pathlib import Path
 from typing import List
 
 from django.conf import settings
 from django.db import IntegrityError, transaction
-from django.db.models import Avg, Max, Sum
+from django.db.models import Avg, FloatField, Max, Sum
+from django.db.models.functions import Cast
 from django.utils.text import slugify
+from django.utils.timezone import make_aware
 from mutagen import id3, mp3, mp4
 from unidecode import unidecode
 
@@ -319,6 +322,13 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         album.total_length = album.songs.aggregate(Sum('track_length'))['track_length__sum']
         album.count_played = album.songs.aggregate(Sum('count_played'))['count_played__sum']
         album.played_at = album.songs.aggregate(Max('played_at'))['played_at__max']
+        # Convert 'played_at' to a numeric format for averaging
+        avg_played_at = album.songs.annotate(
+            played_at_timestamp=Cast('played_at', FloatField())
+        ).aggregate(Avg('played_at_timestamp'))['played_at_timestamp__avg']
+        album.avg_played_at = (
+            make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+        )
         album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
         album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
         album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
@@ -334,6 +344,13 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         artist.total_length = artist.albums.aggregate(Sum('total_length'))['total_length__sum']
         artist.count_played = artist.albums.aggregate(Sum('count_played'))['count_played__sum']
         artist.played_at = artist.albums.aggregate(Max('played_at'))['played_at__max']
+        # Convert 'played_at' to a numeric format for averaging
+        avg_played_at = artist.songs.annotate(
+            played_at_timestamp=Cast('played_at', FloatField())
+        ).aggregate(Avg('played_at_timestamp'))['played_at_timestamp__avg']
+        artist.avg_played_at = (
+            make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+        )
         artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
         artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
         artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']

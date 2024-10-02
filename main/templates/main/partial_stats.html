@@ -1,0 +1,27 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <div class="row">
+            <div class="col">
+                {% if graph_album_ratings_by_year %}
+                    {{ graph_album_ratings_by_year|safe }}
+                {% else %}
+                    <p>No data/graph was provided.</p>
+                {% endif %}
+            </div>
+        </div>
+
+
+        <div class="row">
+            <div class="col-12 col-lg-6 col-xl-4">
+                {% if graph_play_count %}
+                    {{ graph_play_count|safe }}
+                {% else %}
+                    <p>No data/graph was provided.</p>
+                {% endif %}
+            </div>
+        </div>
+
+    </div>
+</div>

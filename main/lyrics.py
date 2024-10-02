@@ -14,6 +14,7 @@ from unidecode import unidecode
 
 from main.constants import (
     AZLYRICS_ARTISTS,
+    AZLYRICS_INSTRUMENTALS,
     AZLYRICS_SONGS,
     BILLBOARD_CHART_URLS,
 )
@@ -160,9 +161,13 @@ def scrape_azlyrics(artist_name: str, song_name: str) -> str:
         song_name = AZLYRICS_SONGS[song_name]
     # logger.info(f'AZLyrics: song name: {song_name}')
 
-    url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'
+    instrumental_name = f'{artist_name}-{song_name}'
+    # logger.info(f'Checking if {instrumental_name} is instrumental...')
+    if instrumental_name in AZLYRICS_INSTRUMENTALS:
+        raise ValueError('[Instrumental]')
 
     # get lyrics
+    url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'
     res_l = requests.get(url_page, timeout=15)
     res_l.raise_for_status()
     soup = BeautifulSoup(res_l.content, 'html.parser')

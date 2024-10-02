@@ -1,13 +1,14 @@
 import logging
 import random
+from datetime import datetime
 from typing import Tuple, Union
 
-from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import ExpressionWrapper, F, FloatField, Max, Sum, Value
+from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Value
 from django.db.models.expressions import Func, RawSQL
 from django.utils import timezone
+from django.utils.timezone import make_aware
 
 from main.constants import LIST_GENRES
 from main.lastfm_service import scrobble
@@ -81,15 +82,28 @@ def set_played(song: Song) -> History:
     album = song.album
     album.count_played = album.songs.aggregate(Sum('count_played'))['count_played__sum']
     album.played_at = album.songs.aggregate(Max('played_at'))['played_at__max']
+    # Convert 'played_at' to a Unix timestamp using SQLite's strftime
+    avg_played_at = album.songs.aggregate(
+        avg_played_at=Avg(RawSQL("strftime('%%s', played_at)", []))
+    )['avg_played_at']
+    album.avg_played_at = (
+        make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+    )
     album.save()
 
     artist = album.artist
     artist.count_played = artist.albums.aggregate(Sum('count_played'))['count_played__sum']
     artist.played_at = artist.albums.aggregate(Max('played_at'))['played_at__max']
+    # Convert 'played_at' to a Unix timestamp using SQLite's strftime
+    avg_played_at = artist.songs.aggregate(
+        avg_played_at=Avg(RawSQL("strftime('%%s', played_at)", []))
+    )['avg_played_at']
+    artist.avg_played_at = (
+        make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+    )
     artist.save()
 
-    if settings.LASTFM_ENABLE:
-        scrobble(history)
+    scrobble(history)
 
     return history
 
@@ -124,23 +138,32 @@ def get_next_song_priority_values() -> Tuple[float, float]:
         earliest_julian_day, current_julian_day = cursor.fetchone()
         logger.info(f'earliest julian: {earliest_julian_day}')
         logger.info(f'current julian: {current_julian_day}')
+    diff = round(current_julian_day - earliest_julian_day)
+    logger.info(f'Days to earliest is {diff:.0f} days')
 
     if earliest_julian_day is None:
-        earliest_julian_day = 1.0  # Default value if no data
+        earliest_julian_diff = 1.0  # Default value if no data
     else:
         # Calculate days since earliest Julian Day
-        earliest_julian_day = current_julian_day - earliest_julian_day
+        earliest_julian_diff = current_julian_day - earliest_julian_day
 
         # Ensure the value is at least 1 to avoid division by zero
-        earliest_julian_day = max(earliest_julian_day, 1.0)
+        earliest_julian_diff = max(earliest_julian_diff, 1.0)
 
-    # make days_since half as valuable
-    earliest_julian_day *= 2.0
+    # adjust the earliest day to prevent spam of top hits
+    # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
+    adj = 1.7
+    adj_earliest_julian_diff = earliest_julian_diff * adj
+    diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)
+    logger.info(
+        f'Diff {earliest_julian_diff} adj with {adj}x [{diff_adj} days] '
+        f'gives {adj_earliest_julian_diff}'
+    )
 
     # Cache the values for 2 hour (3600 seconds * 2)
-    cache.set(cache_key, (max_played, earliest_julian_day), timeout=7200)
+    cache.set(cache_key, (max_played, adj_earliest_julian_diff), timeout=7200)
 
-    return max_played, earliest_julian_day
+    return max_played, adj_earliest_julian_diff
 
 
 def set_genre(instance: Union[Artist, Album, Song], genre: str):

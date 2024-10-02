@@ -1,0 +1,66 @@
+{% load fmt %}
+<div class="row">
+    <div class="col">
+
+        <h3>Similars</h3>
+        <h6>Find similar artists to what you already listen to.</h6>
+
+        <h5 class="my-3">
+            <a class="no-blue me-3" href="{{ album_details.0.wiki_link }}" target="_blank">
+                <i class="bi bi-wikipedia"></i>
+            </a>
+            <a class="no-blue artist-font" href="#"
+               hx-get="/artist/{{ album_details.0.id }}/"
+               hx-trigger="click"
+               hx-target="#main-container"
+               hx-swap="innerHTML">
+                {{ album_details.0.name }}
+            </a>
+            {% if album_details|length > 2 and album_details.2 %}
+                is missing studio album
+                <a class="no-blue" href="{{ album_details.2 }}" target="_blank">
+                    {{ album_details.1 }}
+                </a>
+            {% elif album_details|length > 1 and album_details.1 %}
+                is missing studio album
+                {{ album_details.1 }}
+            {% else %}
+                has all studio albums
+            {% endif %}
+        </h5>
+
+        {% if not grouped_similars %}
+            <p>No artists data found.</p>
+        {% else %}
+            <div class="row">
+                <div class="col-6">
+                    <table class="table table-sm table-striped table-hover mt-1">
+                        <thead>
+                        <tr>
+                            <th></th>
+                            <th>Artist</th>
+                            <th>Total Score</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for sim_artist in grouped_similars %}
+                            <tr>
+                                <td>
+                                    <a class="no-blue"
+                                       href="https://www.wikipedia.org/w/index.php?search={{ sim_artist.artist_name }} Discography"
+                                       target="_blank">
+                                        <i class="bi bi-wikipedia"></i>
+                                    </a>
+                                </td>
+                                <td>{{ sim_artist.artist_name }}</td>
+                                <td>{{ sim_artist.total_score|perc }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        {% endif %}
+
+    </div>
+</div>

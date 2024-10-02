@@ -6,21 +6,18 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
 from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
-from django.db.models import Avg, Count, F
 from django.http import Http404, HttpResponse
-from django.shortcuts import get_object_or_404, redirect, render
-from django.utils import timezone
+from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
-from django.utils.http import urlencode
-from django.utils.text import slugify
-from unidecode import unidecode
 
 from main.constants import GENRE_CHOICES
-from main.lyrics import scrape_billboards, search_azlyrics
-from main.models import Album, Artist, Billboard, Song
+from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
+from main.lyrics import search_azlyrics
+from main.models import Album, Artist, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
+from main.selectors import get_albums_by_year_chart, get_play_count_chart
 
 logger = logging.getLogger(__name__)
 
@@ -211,7 +208,7 @@ def ranking_view(request, facet):
     objs = query.order_by('-rating', '-count_played', '-count_rated').all()
 
     # Add pagination logic
-    paginator = Paginator(objs, 110)
+    paginator = Paginator(objs, 50)
     page = request.GET.get('page')
 
     try:
@@ -238,26 +235,17 @@ def ranking_view(request, facet):
     )
 
 
-def year_view(request):
-    """Show ratings by year."""
-    # Annotate the average rating and count of albums per year
-    avg_ratings_per_year = (
-        Album.objects.values('year')
-        .annotate(avg_rating=Avg('rating'), album_count=Count('id'))
-        .order_by('-year')
-    )
-    max_rating = max([i['avg_rating'] for i in avg_ratings_per_year])
-    min_rating = min([i['avg_rating'] for i in avg_ratings_per_year])
-    max_albums = max([i['album_count'] for i in avg_ratings_per_year])
+def stats_view(request):
+    """Show stats, e.g. ratings by year."""
+    graph_album_ratings_by_year = get_albums_by_year_chart()
+    graph_play_count = get_play_count_chart()
 
     return render(
         request,
-        'main/partial_year.html',
+        'main/partial_stats.html',
         {
-            'avg_ratings_per_year': avg_ratings_per_year,
-            'max_albums': max_albums,
-            'max_rating': max_rating,
-            'min_rating': min_rating,
+            'graph_album_ratings_by_year': graph_album_ratings_by_year,
+            'graph_play_count': graph_play_count,
         },
     )
 
@@ -326,47 +314,19 @@ def genre_view(request, facet: str, facet_id: int, genre: str):
     return response
 
 
-def billboards_view(request):
-    """Get artist to review and new bands from billboards."""
-    if finished_id := request.GET.get('finished'):
-        billboard = get_object_or_404(Billboard, id=finished_id)
-        billboard.finished = True
-        billboard.save()
+def similars_view(request):
+    """Get artist to review and new bands from LastFM."""
+    album_details = scrape_studio_albums()
 
-    artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True)).first()
-
-    if not request.session.get('billboards'):
-        scrape_billboards()
-        request.session['billboards'] = True
-
-    billboards = Billboard.objects.exclude(finished=True).all()
-    artist_slugs = Artist.objects.values_list('slug', flat=True)
-    for billboard in billboards:
-        billboard.found = billboard.artist_slug in artist_slugs
+    try:
+        grouped_similars = update_next_similar_artist()
+    except NotImplementedError as exc:
+        return HttpResponse(str(exc))
 
     ctx = {
-        'artist': artist,
-        'billboards': billboards,
+        'album_details': album_details,
+        'grouped_similars': grouped_similars,
     }
-    response = render(request, 'main/partial_billboards.html', ctx)
+    response = render(request, 'main/partial_similars.html', ctx)
     # patch_cache_control(response, public=True, max_age=86400)
     return response
-
-
-def update_disco_view(request, artist_id: int):
-    """Set disco and go to discography."""
-    # Fetch the artist object based on the artist_id
-    artist = get_object_or_404(Artist, id=artist_id)
-
-    # Update the disco_at field with the current time
-    artist.disco_at = timezone.now()
-    artist.save()
-
-    # Prepare the search parameters for the Wikipedia URL
-    artist_name = slugify(unidecode(artist.name))
-    params = {'search': f'{artist_name.replace("-", "_")}_discography'}
-
-    # Build the Wikipedia URL with encoded parameters
-    url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
-
-    return redirect(url)

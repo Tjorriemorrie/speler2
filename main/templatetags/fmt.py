@@ -78,21 +78,28 @@ def dur(duration: float) -> str:
 
 @register.filter
 def days_ago(value):
-    """Calculate how many days ago a given date or datetime was."""
+    """Calculate how many days ago a given date or datetime was, considering the user's timezone."""
     if not isinstance(value, (datetime, timedelta)):
         return ''
 
-    now = timezone.now()
-    delta = now - value
+    value = timezone.localtime(value)
+    now = timezone.localtime(timezone.now())
+    date_str = value.strftime('%H:%M')
 
-    # Format the date as (d MMM)
+    # today
+    if value.date() == now.date():
+        return f'Today ({date_str})'
+
+    value_midnight = value.replace(hour=0, minute=0, second=0)
+    now_midnight = now.replace(hour=23, minute=59, second=59)
+    delta = now_midnight - value_midnight
+
+    # yesterday
+    if delta.days <= 1:
+        return f'Yesterday ({date_str})'
+
+    # x days ago
     day = value.day  # Get the day without leading zero
     month = value.strftime('%b')  # Get the abbreviated month
-    date_str = f'({day} {month})'  # Combine day and month
-
-    if delta.days < 1:
-        return f'Today {date_str}'
-    elif delta.days == 1:
-        return f'1 day ago {date_str}'
-    else:
-        return f'{delta.days} days ago {date_str}'
+    date_str = f'{day} {month}'  # Combine day and month
+    return f'{delta.days} days ago ({date_str})'

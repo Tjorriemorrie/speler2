@@ -14,7 +14,7 @@
         </h3>
         <p>
             <span class="me-3"><strong>#{{ artist.rank }}</strong></span>
-            <a class="no-blue" href="{% url 'update_disco_view' artist_id=artist.id %}" target="_blank">
+            <a class="no-blue" href="{{ artist.wiki_link }}" target="_blank">
                 <i class="bi bi-wikipedia"></i>
             </a>
             {% include 'main/snippet_genre.html' with facet='artist' obj=artist %}

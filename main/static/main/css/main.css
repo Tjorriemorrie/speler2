@@ -32,7 +32,7 @@
 .title-font {
     font-family: 'Calligraffiti', cursive;
     line-height: 2em;
-    padding-left: 0.17em;
+    padding: 0 0 0.3em 0.17em;
     margin-left: -0.17em;
 }
 

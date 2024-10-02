@@ -12,13 +12,13 @@ from main.models import History, Rating, Song
 logger = logging.getLogger(__name__)
 
 RATINGS_PER_PLAY = 5
-RATINGS_WINDOW = 60 * 30  # minutes
+RATINGS_WINDOW = 60 * 40  # minutes
 
 
 def get_recent_songs_from_history() -> List[Song]:
     """Get recent histories of last half hour, limited to 10."""
     time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
-    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()[:8]
+    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()
     songs = []
     for h in histories:
         if h.song not in songs:
@@ -28,9 +28,9 @@ def get_recent_songs_from_history() -> List[Song]:
 
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
-    rate_count_cut_off = (current_song.count_played * RATINGS_PER_PLAY) + 1
+    rate_count_cut_off = current_song.count_played * RATINGS_PER_PLAY
     logger.info(f'Get match: is rated {current_song.count_rated} < {rate_count_cut_off}')
-    if current_song.count_rated >= rate_count_cut_off:
+    if current_song.count_rated > rate_count_cut_off:
         return
 
     songs = get_recent_songs_from_history()

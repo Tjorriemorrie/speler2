@@ -3,6 +3,7 @@ from pathlib import Path
 from django.conf import settings
 from django.core.cache import cache
 from django.db import models
+from django.utils.http import urlencode
 
 from main import managers
 from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK
@@ -41,6 +42,7 @@ class Artist(Timestamp, Rank):
     total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
     played_at = models.DateTimeField(null=True)
+    avg_played_at = models.DateTimeField(null=True)
     count_rated = models.IntegerField(default=0)
     rated_at = models.DateTimeField(null=True)
     rating = models.FloatField(default=0)
@@ -51,6 +53,13 @@ class Artist(Timestamp, Rank):
 
     def __str__(self):
         return f'<Artist-{self.id} {self.name}>'
+
+    @property
+    def wiki_link(self) -> str:
+        """Get wiki discography search link."""
+        params = {'search': f'{self.name.replace("-", "_")}_discography'}
+        url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
+        return url
 
 
 class Album(Timestamp, Rank):
@@ -66,6 +75,7 @@ class Album(Timestamp, Rank):
     total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
     played_at = models.DateTimeField(null=True)
+    avg_played_at = models.DateTimeField(null=True)
     count_rated = models.IntegerField(default=0)
     rated_at = models.DateTimeField(null=True)
     rating = models.FloatField(default=0)
@@ -160,3 +170,20 @@ class Billboard(Timestamp):
 
     def __str__(self):
         return f'<Billboard-{self.id} {self.chart} {self.artist_name} {self.album_name}>'
+
+
+class Similar(Timestamp):
+    artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='similars')
+    artist_name = models.CharField(max_length=250)
+    artist_slug = models.SlugField(max_length=250)
+    match = models.FloatField()
+    rating = models.FloatField()
+    score = models.FloatField()
+    scraped_at = models.DateTimeField()
+
+    class Meta:
+        unique_together = ['artist', 'artist_slug']
+
+    def __str__(self):
+        perc = f'{self.score * 100:.0f}%'
+        return f'<Similar-{self.id} {self.artist.name} => {self.artist_name} {perc}>'
