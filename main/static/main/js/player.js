@@ -7,7 +7,7 @@ $(document).ready(function () {
 
     // Timezone settings
     const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    document.cookie = "django_timezone=" + timezone;
+    document.cookie = "django_timezone=" + timezone + "; path=/; SameSite=Lax";
     console.log('Timezone set ', timezone)
 
     // Initialize the player once
@@ -113,6 +113,18 @@ $(document).ready(function () {
             console.log("pressed n");
             event.preventDefault();  // Prevent any default behavior
             loadNextSong();  // Load next song when "n" key is pressed
+        }
+
+        const keyMap = {
+            '1': '#rating-box-1',
+            '2': '#rating-box-2',
+            '3': '#rating-box-3'
+        };
+        if (keyMap[event.key]) {
+            const element = document.querySelector(keyMap[event.key]);
+            if (element) {
+                element.click();  // Simulate a click to trigger HTMX request
+            }
         }
     });
 });

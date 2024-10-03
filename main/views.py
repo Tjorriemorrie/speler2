@@ -17,7 +17,13 @@ from main.models import Album, Artist, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
-from main.selectors import get_albums_by_year_chart, get_play_count_chart
+from main.selectors import (
+    get_albums_by_year_chart,
+    get_albums_per_artist_chart,
+    get_play_count_chart,
+    get_songs_by_played_date_chart,
+    get_top_percentile_songs,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -182,9 +188,13 @@ def artist_view(request: WSGIRequest, artist_id: int) -> HttpResponse:
     """Get artist details."""
     artist = get_object_or_404(Artist, id=artist_id)
     albums = artist.albums.order_by('year').all()
+    percentile = 0.10
+    songs = get_top_percentile_songs(artist, percentile)
     ctx = {
         'artist': artist,
         'albums': albums,
+        'songs': songs,
+        'percentile': int(percentile * 100),
     }
     return render(request, 'main/partial_artist.html', ctx)
 
@@ -237,17 +247,25 @@ def ranking_view(request, facet):
 
 def stats_view(request):
     """Show stats, e.g. ratings by year."""
-    graph_album_ratings_by_year = get_albums_by_year_chart()
-    graph_play_count = get_play_count_chart()
+    return render(request, 'main/partial_stats.html', {})
 
-    return render(
-        request,
-        'main/partial_stats.html',
-        {
-            'graph_album_ratings_by_year': graph_album_ratings_by_year,
-            'graph_play_count': graph_play_count,
-        },
-    )
+
+def stats_graph_view(request, graph_name: str):
+    """Get chart for stats view."""
+    if graph_name == 'album_ratings_by_year':
+        graph = get_albums_by_year_chart()
+    elif graph_name == 'play_count':
+        graph = get_play_count_chart()
+    elif graph_name == 'albums_per_artist':
+        graph = get_albums_per_artist_chart()
+    elif graph_name == 'songs_by_date':
+        graph = get_songs_by_played_date_chart()
+    else:
+        return HttpResponse(f'Unknown graph: {graph_name}')
+
+    response = render(request, 'main/partial_stats_graph.html', {'graph': graph})
+    patch_cache_control(response, public=True, max_age=3600)
+    return response
 
 
 def lyrics_view(request, song_id: int):

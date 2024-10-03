@@ -1,5 +1,6 @@
 import logging
 import random
+from collections import defaultdict
 from datetime import datetime
 from typing import Tuple, Union
 
@@ -9,10 +10,12 @@ from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Va
 from django.db.models.expressions import Func, RawSQL
 from django.utils import timezone
 from django.utils.timezone import make_aware
+from unidecode import unidecode
 
-from main.constants import LIST_GENRES
+from main.constants import LIST_GENRES, RATINGS_WINDOW
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
+from main.selectors import get_recent_artist_ids
 
 logger = logging.getLogger(__name__)
 
@@ -53,7 +56,25 @@ def get_next_song() -> Song:
     ).order_by('-priority')
 
     # Get the song with the highest priority
-    next_song = songs_with_priority.first()
+    # but exclude recent artist, to prevent single artist spam
+    limit = RATINGS_WINDOW // 60
+    recent_artist_ids = get_recent_artist_ids()
+    songs = list(songs_with_priority.all()[:limit])  # Query once and store in memory
+    next_song = None
+    artists_already_played = defaultdict(int)
+    # Iterate over the songs and check if the artist was recently played
+    for song in songs:
+        if song.artist.id not in recent_artist_ids:
+            next_song = song  # Found a valid song, assign it
+            break
+        artists_already_played[song.artist.name] += 1
+    if artists_already_played:
+        aap_str = ', '.join(f'{k} (x{v})' for k, v in artists_already_played.items())
+        logger.info(f'Already played {unidecode(aap_str)}')
+    # If no valid song is found, randomly select one from the top 100
+    if not next_song and songs:
+        logger.info('Could not find any unplayed artist in first 100 priority queue!')
+        next_song = random.choice(songs)  # noqa: S311
     if not next_song:
         raise ValueError('Expected to get a song, but found nothing')
 
@@ -152,7 +173,7 @@ def get_next_song_priority_values() -> Tuple[float, float]:
 
     # adjust the earliest day to prevent spam of top hits
     # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
-    adj = 1.7
+    adj = 1.62
     adj_earliest_julian_diff = earliest_julian_diff * adj
     diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)
     logger.info(

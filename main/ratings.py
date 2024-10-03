@@ -7,12 +7,12 @@ from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
+from main.constants import RATINGS_WINDOW
 from main.models import History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
 RATINGS_PER_PLAY = 5
-RATINGS_WINDOW = 60 * 40  # minutes
 
 
 def get_recent_songs_from_history() -> List[Song]:

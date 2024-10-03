@@ -30,6 +30,7 @@ urlpatterns = [
     path('artist/<int:artist_id>/', views.artist_view, name='artist'),
     path('ranking/<str:facet>/', views.ranking_view, name='ranking'),
     path('stats/', views.stats_view, name='stats'),
+    path('stats/graph/<str:graph_name>/', views.stats_graph_view, name='stats_graph'),
     path('lyrics/<int:song_id>/', views.lyrics_view, name='lyric_txt'),
     path('genre/<str:facet>/<int:facet_id>/<str:genre>/', views.genre_view, name='genre'),
     path('similars/', views.similars_view, name='similars'),

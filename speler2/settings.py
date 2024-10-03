@@ -165,7 +165,6 @@ LOGGING = {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
             'formatter': 'compact',
-            # Ensure that sys.stdout is re-opened with utf-8 encoding
             'stream': sys.stdout,
         },
     },

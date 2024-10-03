@@ -4,6 +4,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.db import models
 from django.utils.http import urlencode
+from unidecode import unidecode
 
 from main import managers
 from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK
@@ -52,7 +53,8 @@ class Artist(Timestamp, Rank):
     disco_at = models.DateTimeField(null=True)
 
     def __str__(self):
-        return f'<Artist-{self.id} {self.name}>'
+        txt = f'<Artist-{self.id} {self.name}>'
+        return unidecode(txt)
 
     @property
     def wiki_link(self) -> str:
@@ -84,7 +86,8 @@ class Album(Timestamp, Rank):
     genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
 
     def __str__(self):
-        return f'<Album-{self.id} {self.name} {self.artist.name}>'
+        txt = f'<Album-{self.id} {self.name} {self.artist.name}>'
+        return unidecode(txt)
 
 
 class Song(Timestamp, Rank):
@@ -114,7 +117,8 @@ class Song(Timestamp, Rank):
 
     def __str__(self):
         """Get str."""
-        return f'<Song-{self.id} {self.name} {self.artist.name}>'
+        txt = f'<Song-{self.id} {self.name} {self.artist.name}>'
+        return unidecode(txt)
 
     def file_path(self) -> Path:
         """Get audio file path."""
@@ -134,7 +138,8 @@ class History(Timestamp):
 
     def __str__(self):
         """Get str."""
-        return f'<History-{self.id} {self.played_at:%Y-%m-%d} {self.song.name}>'
+        txt = f'<History-{self.id} {self.played_at:%Y-%m-%d} {self.song.name}>'
+        return unidecode(txt)
 
 
 class Rating(Timestamp):
@@ -144,7 +149,8 @@ class Rating(Timestamp):
 
     def __str__(self):
         """Get rating."""
-        return f'<Rating-{self.id} {self.winner.name} >>> {self.loser.name}>'
+        txt = f'<Rating-{self.id} {self.winner.name} >>> {self.loser.name}>'
+        return unidecode(txt)
 
 
 class Billboard(Timestamp):
@@ -169,7 +175,8 @@ class Billboard(Timestamp):
         ordering = ['chart_at', 'pos']
 
     def __str__(self):
-        return f'<Billboard-{self.id} {self.chart} {self.artist_name} {self.album_name}>'
+        txt = f'<Billboard-{self.id} {self.chart} {self.artist_name} {self.album_name}>'
+        return unidecode(txt)
 
 
 class Similar(Timestamp):
@@ -186,4 +193,5 @@ class Similar(Timestamp):
 
     def __str__(self):
         perc = f'{self.score * 100:.0f}%'
-        return f'<Similar-{self.id} {self.artist.name} => {self.artist_name} {perc}>'
+        txt = f'<Similar-{self.id} {self.artist.name} => {self.artist_name} {perc}>'
+        return unidecode(txt)

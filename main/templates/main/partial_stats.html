@@ -2,24 +2,44 @@
 <div class="row">
     <div class="col">
 
+        <h4 class="my-4 text-center">Some stats about usage.</h4>
+
         <div class="row">
             <div class="col">
-                {% if graph_album_ratings_by_year %}
-                    {{ graph_album_ratings_by_year|safe }}
-                {% else %}
-                    <p>No data/graph was provided.</p>
-                {% endif %}
+                <a href="#"
+                   hx-get="/stats/graph/album_ratings_by_year/"
+                   hx-trigger="load"
+                   hx-target="this"
+                   hx-swap="outerHTML">
+                </a>
             </div>
         </div>
 
 
         <div class="row">
             <div class="col-12 col-lg-6 col-xl-4">
-                {% if graph_play_count %}
-                    {{ graph_play_count|safe }}
-                {% else %}
-                    <p>No data/graph was provided.</p>
-                {% endif %}
+                <a href="#"
+                   hx-get="/stats/graph/songs_by_date/"
+                   hx-trigger="load"
+                   hx-target="this"
+                   hx-swap="outerHTML">
+                </a>
+            </div>
+            <div class="col-12 col-lg-6 col-xl-4">
+                <a href="#"
+                   hx-get="/stats/graph/play_count/"
+                   hx-trigger="load"
+                   hx-target="this"
+                   hx-swap="outerHTML">
+                </a>
+            </div>
+            <div class="col-12 col-lg-6 col-xl-4">
+                <a href="#"
+                   hx-get="/stats/graph/albums_per_artist/"
+                   hx-trigger="load"
+                   hx-target="this"
+                   hx-swap="outerHTML">
+                </a>
             </div>
         </div>
 

@@ -1,3 +1,5 @@
+RATINGS_WINDOW = 60 * 40  # minutes
+
 GENRE_CHRISTIAN = 'christian'
 GENRE_POP_DANCE = 'pop and dance'
 GENRE_SOFT_ROCK = 'soft rock'
@@ -48,38 +50,52 @@ AZLYRICS_ARTISTS = {
 
 AZLYRICS_SONGS = {
     '4wallsfuneral': 'fourwalls',  # staind
+    '5minutesalone': '5minutesalone130139',  # pantera
     '7chinesebros': 'sevenchinesebrothers',  # REM
     'allapologies': 'allapologies112595',  # nirvana
     'allfallsdown': 'allfalldown',  # machine head
     'allineedtoknow': 'allineednow',  # thousand foot krutch
+    'amurderofone': 'murderofone',  # counting crows
     'astralromance': 'astralromance129996',  # nightwish
+    'beautifulskyfeatjimjames': 'beautifulsky',  # semisonic
     'becoming': 'becoming130138',  # pantera
+    'bendandbreak': 'bendbreak',  # keane
     'bettermanthecage': 'betterman',  # oasis
     'burningthemaps': 'burningthemap',  # better than ezra
     'caughtalitesneeze': 'caughtalightsneeze',  # evans blue
     'comebackaround': 'comebackaround28977',  # feeder
     'daddyuntitled': 'daddy',  # korn
+    'darwintheredsummersunextendedcoda': 'redsummersun',  # third eye blind
     'getthruthis': 'getthroughthis',  # art of dying
     'gimmestitches': 'gimmiestitches',  # foo fighters
     'highanddry': 'highdry',  # radiohead
     'illattack': 'attack',  # thrirty seconds to mars
+    'imbroken': 'imbroken130140',  # pantera
     'ishfwilf': 'istillhaventfoundwhatimlookingforishfwilf',  # disturbed
+    'mfc': 'mfcminifastcar',  # pearl jam
     'mudshuvel': 'mudshovel',  # staind
     'pinata': 'piata',  # chevelle
     'qthebestoneofourlives': 'q',  # evans blue
     'reprisesandblastedskin': 'sandblastedskin',  # pantera
     'riptideedit': 'riptide',  # sick puppies
+    'strobinsoninhiscadillacdream': 'saintrobinsoninhiscadillacdream',  # counting crows
+    'stirbnichtvormirdontdiebeforeido': 'stirbnichtvormir',  # rammstein
+    'strengthbeyondstrength': 'strengthbeyondstrength130137',  # pantera
     'thebeatgoeson': 'beatgoeson',  # britney spears
+    'thepeoplethatwelove': 'thepeoplethatwelovespeedkills',  # bush
     'tumbleandfall': 'tumblefall',  # feeder
     'voodoowitchhunt': 'voodoo',  # godsmack
     'war': 'streetfighterwar',  # sick puppies
+    'whoreallycaresfeaturingthesoundofinsanity': 'whoreallycares',  # powderfinger
 }
 
 AZLYRICS_INSTRUMENTALS = [
+    'coalchamber-dumpsterdive',
     'disturbed-remnants',
     'nightwish-moondance',
     'linkin park-fromzero',
     'puddle of mudd-welcometogalvania',
     'nickelback-thebetrayalacti',
+    'nightwish-lastofthewilds',
     'popevil-instrumental',
 ]
