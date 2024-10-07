@@ -48,6 +48,12 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
+    # 'django_extensions',
+    # 'sslserver',
+    'crispy_forms',
+    'crispy_bootstrap5',
+    'django_tables2',
+    'django_filters',
     'main.apps.MainConfig',
 ]
 
@@ -191,6 +197,10 @@ CACHES = {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
     }
 }
+
+
+CRISPY_ALLOWED_TEMPLATE_PACKS = 'bootstrap5'
+CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 
 MUSIC_DIR = Path(env('MUSIC_DIR'))

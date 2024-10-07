@@ -55,29 +55,39 @@ AZLYRICS_SONGS = {
     'allapologies': 'allapologies112595',  # nirvana
     'allfallsdown': 'allfalldown',  # machine head
     'allineedtoknow': 'allineednow',  # thousand foot krutch
+    'allthoseyesterdayshummus': 'allthoseyesterdays',  # pearl jam
     'amurderofone': 'murderofone',  # counting crows
     'astralromance': 'astralromance129996',  # nightwish
     'beautifulskyfeatjimjames': 'beautifulsky',  # semisonic
     'becoming': 'becoming130138',  # pantera
     'bendandbreak': 'bendbreak',  # keane
     'bettermanthecage': 'betterman',  # oasis
+    'blew': 'blew112537',  # nirvana
     'burningthemaps': 'burningthemap',  # better than ezra
     'caughtalitesneeze': 'caughtalightsneeze',  # evans blue
     'comebackaround': 'comebackaround28977',  # feeder
     'daddyuntitled': 'daddy',  # korn
     'darwintheredsummersunextendedcoda': 'redsummersun',  # third eye blind
+    'dumb': 'dumb112602',  # nirvana
     'getthruthis': 'getthroughthis',  # art of dying
     'gimmestitches': 'gimmiestitches',  # foo fighters
     'highanddry': 'highdry',  # radiohead
     'illattack': 'attack',  # thrirty seconds to mars
     'imbroken': 'imbroken130140',  # pantera
     'ishfwilf': 'istillhaventfoundwhatimlookingforishfwilf',  # disturbed
+    'jesusdoesntwantmeforasunbeam': 'jesusdontwantmeforasunbeam',  # nirvana
+    'ko': 'k',  # korn
     'mfc': 'mfcminifastcar',  # pearl jam
     'mudshuvel': 'mudshovel',  # staind
+    'oceansandstreams': 'oceansstreams',  # the black keys
+    'peaceloveandunderstanding': 'whatssofunnyboutpeaceloveandunderstanding',  # a perfect circle
+    'pictureperfectinyoureyesplanets2': 'pictureperfectinyoureyes',  # 10 years
     'pinata': 'piata',  # chevelle
     'qthebestoneofourlives': 'q',  # evans blue
     'reprisesandblastedskin': 'sandblastedskin',  # pantera
     'riptideedit': 'riptide',  # sick puppies
+    'thesirenscall': 'sirenscall',  # live
+    'smashcomeoutandplayreprise': 'smash',  # the offspring
     'strobinsoninhiscadillacdream': 'saintrobinsoninhiscadillacdream',  # counting crows
     'stirbnichtvormirdontdiebeforeido': 'stirbnichtvormir',  # rammstein
     'strengthbeyondstrength': 'strengthbeyondstrength130137',  # pantera
@@ -88,14 +98,3 @@ AZLYRICS_SONGS = {
     'war': 'streetfighterwar',  # sick puppies
     'whoreallycaresfeaturingthesoundofinsanity': 'whoreallycares',  # powderfinger
 }
-
-AZLYRICS_INSTRUMENTALS = [
-    'coalchamber-dumpsterdive',
-    'disturbed-remnants',
-    'nightwish-moondance',
-    'linkin park-fromzero',
-    'puddle of mudd-welcometogalvania',
-    'nickelback-thebetrayalacti',
-    'nightwish-lastofthewilds',
-    'popevil-instrumental',
-]

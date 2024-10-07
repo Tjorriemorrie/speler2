@@ -1,0 +1,82 @@
+{% extends "django_tables2/bootstrap5.html" %}
+
+{% load django_tables2 %}
+{% load i18n l10n %}
+{% load fmt %}
+{% load static %}
+
+
+{% block table.thead %}
+    {% if table.show_header %}
+        <thead {{ table.attrs.thead.as_html }}>
+        <tr>
+            {% for column in table.columns %}
+                <th {{ column.attrs.th.as_html }} scope="col">
+                    {% if column.orderable %}
+                        <a href="#"
+                           hx-get="{% url 'song_list' %}{% querystring table.prefixed_order_by_field=column.order_by_alias.next page=1 %}"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            {% if column.is_ordered %}
+                                {% if column.order_by_alias.is_ascending %}
+                                    <i class="bi bi-caret-up-fill"></i>
+                                {% else %}
+                                    <i class="bi bi-caret-down-fill"></i>
+                                {% endif %}
+                            {% endif %}
+                            {{ column.header }}
+                        </a>
+                    {% else %}
+                        {{ column.header }}
+                    {% endif %}
+                </th>
+            {% endfor %}
+        </tr>
+        </thead>
+    {% endif %}
+{% endblock table.thead %}
+
+
+{% block pagination.previous %}
+    <li class="previous page-item">
+        <a href="#"
+           hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=table.page.previous_page_number %}"
+           hx-target="#main-container"
+           hx-swap="innerHTML"
+           class="page-link">
+            <span aria-hidden="true">&laquo;</span>
+            {% trans 'previous' %}
+        </a>
+    </li>
+{% endblock pagination.previous %}
+
+
+{% block pagination.range %}
+    {% for p in table.page|table_page_range:table.paginator %}
+        <li class="page-item{% if table.page.number == p %} active{% endif %}">
+            <a class="page-link"
+                {% if p != '...' %}
+                   href="#"
+                   hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=p %}"
+                   hx-target="#main-container"
+                   hx-swap="innerHTML"
+                {% endif %}>
+                {{ p }}
+            </a>
+        </li>
+    {% endfor %}
+{% endblock pagination.range %}
+
+
+{% block pagination.next %}
+    <li class="next page-item">
+        <a href="#"
+           hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=table.page.next_page_number %}"
+           hx-target="#main-container"
+           hx-swap="innerHTML"
+           class="page-link">
+            {% trans 'next' %}
+            <span aria-hidden="true">&raquo;</span>
+        </a>
+    </li>
+{% endblock pagination.next %}

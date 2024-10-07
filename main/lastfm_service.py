@@ -137,9 +137,7 @@ def update_next_similar_artist():
 #         """Get playcount of user"""
 
 
-BAD_ALBUMS = [
-    'Seether Disclaimer II',
-]
+BAD_ALBUMS = ['Seether Disclaimer II', 'Nightwish Human. :II: Nature.']
 
 
 def scrape_studio_albums():

@@ -1,12 +1,18 @@
-{% if use_cache %}
-    <span href="#"
-          hx-get="/lyrics/{{ current_song_id }}/?nocache=1"
-          hx-trigger="click"
-          hx-target="#lyrics-container"
-          hx-swap="innerHTML">
-                <i class="bi bi-wrench"></i>
-            </span>
-{% endif %}
-<div class="lyrics-font">
+<span class="instrument" href="#" title="Set song as instrumental only"
+      hx-get="/lyrics/{{ current_song_id }}/?instrument=1"
+      hx-trigger="click"
+      hx-target="#lyrics-container"
+      hx-swap="innerHTML">
+        <i class="bi bi-music-note"></i>
+</span>
+<span class="refresh" href="#" title="Reload lyrics from AZLyrics"
+      hx-get="/lyrics/{{ current_song_id }}/?refresh=1"
+      hx-trigger="click"
+      hx-target="#lyrics-container"
+      hx-swap="innerHTML">
+        <i class="bi bi-arrow-clockwise"></i>
+</span>
+
+    <div class="lyrics-font">
     {{ lyrics|linebreaks }}
 </div>

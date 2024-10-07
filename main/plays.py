@@ -70,7 +70,7 @@ def get_next_song() -> Song:
         artists_already_played[song.artist.name] += 1
     if artists_already_played:
         aap_str = ', '.join(f'{k} (x{v})' for k, v in artists_already_played.items())
-        logger.info(f'Already played {unidecode(aap_str)}')
+        logger.info(f'>>>>>>>>>> Already played: {unidecode(aap_str)}')
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
         logger.info('Could not find any unplayed artist in first 100 priority queue!')
@@ -173,7 +173,7 @@ def get_next_song_priority_values() -> Tuple[float, float]:
 
     # adjust the earliest day to prevent spam of top hits
     # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
-    adj = 1.62
+    adj = 1.66
     adj_earliest_julian_diff = earliest_julian_diff * adj
     diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)
     logger.info(

@@ -14,7 +14,6 @@ from unidecode import unidecode
 
 from main.constants import (
     AZLYRICS_ARTISTS,
-    AZLYRICS_INSTRUMENTALS,
     AZLYRICS_SONGS,
     BILLBOARD_CHART_URLS,
 )
@@ -96,26 +95,27 @@ def clean_text_with_paragraphs(html_text):
     return clean_text
 
 
-def search_azlyrics(song: Song, use_cache: bool = True) -> str:
+def search_azlyrics(song: Song, refresh: bool = False, instrument: bool = False) -> str:
     """Scrape AZ Lyrics."""
     artist_name = unidecode(song.artist.name.casefold())
     artist_name = re.sub(r'[^a-z0-9]', '', artist_name)
-
     song_name = unidecode(song.name.casefold())
     song_name = re.sub(r'[^a-z0-9]', '', song_name)
-
     lyrics_file_path = Path(settings.LYRICS_DIR) / f'{artist_name}-{song_name}-{song.id}.txt'
+
     if lyrics_file_path.exists():
-        if use_cache:
-            with Path.open(lyrics_file_path, 'r', encoding='utf-8') as file:
-                return file.read()
-        else:
+        if refresh or instrument:
             logger.info(f'Removed existing lyrics file: {lyrics_file_path}')
             lyrics_file_path.unlink()
+        else:
+            with Path.open(lyrics_file_path, 'r', encoding='utf-8') as file:
+                return file.read()
 
-    lyrics_txt = scrape_azlyrics(artist_name, song_name)
-
-    lyrics = clean_text_with_paragraphs(lyrics_txt)
+    if instrument:
+        lyrics = f'{artist_name} - {song_name}\n\n[Instrumental]'
+    else:
+        lyrics_txt = scrape_azlyrics(artist_name, song_name)
+        lyrics = clean_text_with_paragraphs(lyrics_txt)
 
     with Path.open(lyrics_file_path, 'w', encoding='utf-8') as file:
         file.write(lyrics)
@@ -160,11 +160,6 @@ def scrape_azlyrics(artist_name: str, song_name: str) -> str:
     if song_name in AZLYRICS_SONGS:
         song_name = AZLYRICS_SONGS[song_name]
     # logger.info(f'AZLyrics: song name: {song_name}')
-
-    instrumental_name = f'{artist_name}-{song_name}'
-    # logger.info(f'Checking if {instrumental_name} is instrumental...')
-    if instrumental_name in AZLYRICS_INSTRUMENTALS:
-        raise ValueError('[Instrumental]')
 
     # get lyrics
     url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'

@@ -1,0 +1,42 @@
+{% load django_tables2 %}
+{% load crispy_forms_tags %}
+{% load fmt %}
+
+<div class="row">
+
+    <div class="col-auto">
+        <h4 class="mt-4">{{ table.paginator.count|intspace }} songs</h4>
+    </div>
+
+    <div class="col-auto ms-auto text-end">
+        <form class="row align-items-center g-3 filtering-form"
+              hx-get="{% url 'song_list' %}"
+              hx-target="#main-container"
+              hx-swap="innerHTML">
+            <div class="col-auto">
+                {{ filtering.form|crispy }}
+            </div>
+            <div class="col-auto">
+                <button type="submit" class="btn btn-light">
+                    <i class="bi bi-funnel"></i>
+                </button>
+            </div>
+            {% if filtering.data.query %}
+                <div class="col-auto ms-3">
+                    <div class="alert alert-light">
+                        <button ctype="button" class="btn-close me-2 close-icon" aria-label="Close"
+                                hx-get="{% url 'song_list' %}?{{ filtering.form.query.name }}=&"
+                                hx-target="#main-container"
+                                hx-swap="innerHTML">
+                        </button>
+                        <span>"{{ filtering.data.query }}"</span>
+                    </div>
+                </div>
+            {% endif %}
+        </form>
+    </div>
+
+</div>
+
+
+{% render_table table %}

@@ -99,6 +99,13 @@ $(document).ready(function () {
 
 
     $(document).on('keydown', function (event) {
+        // Check if the event target is an input or textarea
+        const tagName = event.target.tagName.toLowerCase();
+        if (tagName === 'input' || tagName === 'textarea' || event.target.isContentEditable) {
+            // Do not proceed if the focus is on an input, textarea, or editable content
+            return;
+        }
+
         // Add event listener for spacebar to pause/resume playback
         if (event.code === 'Space' && player) {
             event.preventDefault();  // Prevent the page from scrolling down
@@ -108,6 +115,7 @@ $(document).ready(function () {
                 player.play();
             }
         }
+
         // Add event listener for the "n" key to load the next song
         if (event.key === 'n' || event.code === 'KeyN') {
             console.log("pressed n");
@@ -127,4 +135,21 @@ $(document).ready(function () {
             }
         }
     });
+
+    window.addEventListener('beforeunload', function () {
+        // Get all cookies
+        const cookies = document.cookie.split(";");
+
+        // Loop through the cookies and delete each one
+        for (let i = 0; i < cookies.length; i++) {
+            let cookie = cookies[i];
+            let eqPos = cookie.indexOf("=");
+            let name = eqPos > -1 ? cookie.substr(0, eqPos) : cookie;
+
+            // Set the cookie to expire in the past, effectively deleting it
+            console.log('clearing cookie ', name);
+            document.cookie = name + "=;expires=Thu, 01 Jan 1970 00:00:00 GMT;path=/";
+        }
+    });
+
 });

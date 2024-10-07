@@ -1,3 +1,4 @@
+import locale
 from datetime import datetime, timedelta
 
 from django import template
@@ -44,7 +45,7 @@ def trck(song: Song) -> str:
 
 
 @register.simple_tag
-def iconrank(value: int, cnt: int, upper: int, lower: int = None, stars: bool = True) -> str:
+def iconrank(value: int, cnt: float, upper: float, lower: float = None, stars: bool = True) -> str:
     """Show star ranking."""
     # If lower is provided, normalize the value between lower and upper
     if lower is not None:
@@ -103,3 +104,13 @@ def days_ago(value):
     month = value.strftime('%b')  # Get the abbreviated month
     date_str = f'{day} {month}'  # Combine day and month
     return f'{delta.days} days ago ({date_str})'
+
+
+@register.filter
+def intspace(value):
+    """Space for thousands."""
+    try:
+        locale.setlocale(locale.LC_ALL, '')  # Set to the user's locale
+        return '{:n}'.format(int(value)).replace(',', ' ').replace('.', ',')
+    except (ValueError, TypeError):
+        return value

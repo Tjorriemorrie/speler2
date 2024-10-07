@@ -9,8 +9,11 @@ from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
+from django_filters.views import FilterMixin
+from django_tables2 import SingleTableView
 
 from main.constants import GENRE_CHOICES
+from main.filters import SongFilter
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import search_azlyrics
 from main.models import Album, Artist, Song
@@ -24,6 +27,7 @@ from main.selectors import (
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
 )
+from main.tables import SongTable
 
 logger = logging.getLogger(__name__)
 
@@ -245,6 +249,28 @@ def ranking_view(request, facet):
     )
 
 
+class SongListView(SingleTableView, FilterMixin):
+    model = Song
+    # queryset = Song.objects.all()
+    ordering = ['-count_played', '-rating']
+    filterset_class = SongFilter
+    table_class = SongTable
+    template_name = 'main/partial_listing.html'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get query."""
+        queryset = super().get_queryset()
+        self.filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        return self.filterset.qs
+
+    def get_context_data(self, **kwargs):
+        """Get context."""
+        context = super().get_context_data(**kwargs)
+        context['filtering'] = self.filterset
+        return context
+
+
 def stats_view(request):
     """Show stats, e.g. ratings by year."""
     return render(request, 'main/partial_stats.html', {})
@@ -270,23 +296,26 @@ def stats_graph_view(request, graph_name: str):
 
 def lyrics_view(request, song_id: int):
     """Show lyric."""
-    use_cache = not bool(request.GET.get('nocache'))
-    if not use_cache:
-        logger.info(f'Fetching lyrics without cache for {song_id}!')
+    cache = True
     song = get_object_or_404(Song, id=song_id)
+    refresh = bool(request.GET.get('refresh'))
+    instrument = bool(request.GET.get('instrument'))
 
     try:
-        lyrics = search_azlyrics(song, use_cache)
+        lyrics = search_azlyrics(song, refresh, instrument)
     except (requests.RequestException, ValueError) as exc:
-        return HttpResponse(str(exc))
+        lyrics = str(exc)
+        cache = False
 
     ctx = {
         'lyrics': lyrics,
         'current_song_id': request.session.get('song_id'),
-        'use_cache': use_cache,
     }
     response = render(request, 'main/partial_lyrics.html', ctx)
-    patch_cache_control(response, public=True, max_age=86400)
+    if cache:
+        patch_cache_control(response, public=True, max_age=86400)
+    else:
+        logger.info('Not using cache for lyrics')
     return response
 
 

@@ -61,7 +61,7 @@ def scan_directory(*args, **kwargs):
         artist.count_songs = artist.songs.count()
         artist.total_length = artist.albums.aggregate(Sum('total_length'))['total_length__sum']
         logger.info(
-            f'Updated artist {artist.name}: '
+            f'Updated artist {unidecode(artist.name)}: '
             f'count_albums={artist.count_albums} count_songs={artist.count_songs}'
         )
         artist.save()
@@ -148,7 +148,7 @@ def parse_id3_tag(file_path: str) -> dict:
         metadata = get_m4a_metadata(file_path)
     else:
         raise NotImplementedError(f'Unsupported file extension for {file_path}')
-    logger.info(f'Parsed metadata: {metadata}')
+    logger.info(f'Parsed metadata: {unidecode(str(metadata))}')
     return metadata
 
 
