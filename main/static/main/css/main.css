@@ -432,7 +432,7 @@ tr.bg-secondary-subtle {
 
 
 a.play-icon {
-    color: #999;
+    color: #999 !important;
     padding-right: 0.5em;
     text-decoration: none;
 }

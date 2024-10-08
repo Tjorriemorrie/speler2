@@ -13,7 +13,7 @@ from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 
 from main.constants import GENRE_CHOICES
-from main.filters import SongFilter
+from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import search_azlyrics
 from main.models import Album, Artist, Song
@@ -27,7 +27,7 @@ from main.selectors import (
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
 )
-from main.tables import SongTable
+from main.tables import AlbumTable, ArtistTable, SongTable
 
 logger = logging.getLogger(__name__)
 
@@ -251,8 +251,7 @@ def ranking_view(request, facet):
 
 class SongListView(SingleTableView, FilterMixin):
     model = Song
-    # queryset = Song.objects.all()
-    ordering = ['-count_played', '-rating']
+    ordering = ['-played_at']
     filterset_class = SongFilter
     table_class = SongTable
     template_name = 'main/partial_listing.html'
@@ -268,6 +267,51 @@ class SongListView(SingleTableView, FilterMixin):
         """Get context."""
         context = super().get_context_data(**kwargs)
         context['filtering'] = self.filterset
+        context['facet'] = 'songs'
+        return context
+
+
+class AlbumListView(SingleTableView, FilterMixin):
+    model = Album
+    ordering = ['-rating']
+    filterset_class = AlbumFilter
+    table_class = AlbumTable
+    template_name = 'main/partial_listing.html'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get query."""
+        queryset = super().get_queryset()
+        self.filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        return self.filterset.qs
+
+    def get_context_data(self, **kwargs):
+        """Get context."""
+        context = super().get_context_data(**kwargs)
+        context['filtering'] = self.filterset
+        context['facet'] = 'albums'
+        return context
+
+
+class ArtistListView(SingleTableView, FilterMixin):
+    model = Artist
+    ordering = ['-rating']
+    filterset_class = ArtistFilter
+    table_class = ArtistTable
+    template_name = 'main/partial_listing.html'
+    paginate_by = 50
+
+    def get_queryset(self):
+        """Get query."""
+        queryset = super().get_queryset()
+        self.filterset = self.filterset_class(self.request.GET, queryset=queryset)
+        return self.filterset.qs
+
+    def get_context_data(self, **kwargs):
+        """Get context."""
+        context = super().get_context_data(**kwargs)
+        context['filtering'] = self.filterset
+        context['facet'] = 'artists'
         return context
 
 

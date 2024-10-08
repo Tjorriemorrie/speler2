@@ -76,6 +76,7 @@ AZLYRICS_SONGS = {
     'imbroken': 'imbroken130140',  # pantera
     'ishfwilf': 'istillhaventfoundwhatimlookingforishfwilf',  # disturbed
     'jesusdoesntwantmeforasunbeam': 'jesusdontwantmeforasunbeam',  # nirvana
+    'keepawayacoustic': 'keepaway',  # godsmack
     'ko': 'k',  # korn
     'mfc': 'mfcminifastcar',  # pearl jam
     'mudshuvel': 'mudshovel',  # staind
@@ -84,16 +85,19 @@ AZLYRICS_SONGS = {
     'pictureperfectinyoureyesplanets2': 'pictureperfectinyoureyes',  # 10 years
     'pinata': 'piata',  # chevelle
     'qthebestoneofourlives': 'q',  # evans blue
+    'realignacoustic': 'realign',  # godsmack
     'reprisesandblastedskin': 'sandblastedskin',  # pantera
     'riptideedit': 'riptide',  # sick puppies
     'thesirenscall': 'sirenscall',  # live
     'smashcomeoutandplayreprise': 'smash',  # the offspring
+    'spiralacoustic': 'spiral',  # godsmack
     'strobinsoninhiscadillacdream': 'saintrobinsoninhiscadillacdream',  # counting crows
     'stirbnichtvormirdontdiebeforeido': 'stirbnichtvormir',  # rammstein
     'strengthbeyondstrength': 'strengthbeyondstrength130137',  # pantera
     'thebeatgoeson': 'beatgoeson',  # britney spears
     'thepeoplethatwelove': 'thepeoplethatwelovespeedkills',  # bush
     'tumbleandfall': 'tumblefall',  # feeder
+    'voicesacoustic': 'voices',  # godsmack
     'voodoowitchhunt': 'voodoo',  # godsmack
     'war': 'streetfighterwar',  # sick puppies
     'whoreallycaresfeaturingthesoundofinsanity': 'whoreallycares',  # powderfinger

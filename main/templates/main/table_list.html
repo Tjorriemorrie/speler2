@@ -14,7 +14,7 @@
                 <th {{ column.attrs.th.as_html }} scope="col">
                     {% if column.orderable %}
                         <a href="#"
-                           hx-get="{% url 'song_list' %}{% querystring table.prefixed_order_by_field=column.order_by_alias.next page=1 %}"
+                           hx-get="{{ table.request.path }}{% querystring table.prefixed_order_by_field=column.order_by_alias.next page=1 %}"
                            hx-target="#main-container"
                            hx-swap="innerHTML">
                             {% if column.is_ordered %}
@@ -40,7 +40,7 @@
 {% block pagination.previous %}
     <li class="previous page-item">
         <a href="#"
-           hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=table.page.previous_page_number %}"
+           hx-get="{{ table.request.path }}{% querystring table.prefixed_page_field=table.page.previous_page_number %}"
            hx-target="#main-container"
            hx-swap="innerHTML"
            class="page-link">
@@ -57,7 +57,7 @@
             <a class="page-link"
                 {% if p != '...' %}
                    href="#"
-                   hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=p %}"
+                   hx-get="{{ table.request.path }}{% querystring table.prefixed_page_field=p %}"
                    hx-target="#main-container"
                    hx-swap="innerHTML"
                 {% endif %}>
@@ -71,7 +71,7 @@
 {% block pagination.next %}
     <li class="next page-item">
         <a href="#"
-           hx-get="{% url 'song_list' %}{% querystring table.prefixed_page_field=table.page.next_page_number %}"
+           hx-get="{{ table.request.path }}{% querystring table.prefixed_page_field=table.page.next_page_number %}"
            hx-target="#main-container"
            hx-swap="innerHTML"
            class="page-link">

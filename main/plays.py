@@ -173,7 +173,7 @@ def get_next_song_priority_values() -> Tuple[float, float]:
 
     # adjust the earliest day to prevent spam of top hits
     # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
-    adj = 1.66
+    adj = 1.57
     adj_earliest_julian_diff = earliest_julian_diff * adj
     diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)
     logger.info(

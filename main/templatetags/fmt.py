@@ -45,7 +45,9 @@ def trck(song: Song) -> str:
 
 
 @register.simple_tag
-def iconrank(value: int, cnt: float, upper: float, lower: float = None, stars: bool = True) -> str:
+def iconrank(
+    value: float, cnt: float, upper: float, lower: float = None, stars: bool = True
+) -> str:
     """Show star ranking."""
     # If lower is provided, normalize the value between lower and upper
     if lower is not None:

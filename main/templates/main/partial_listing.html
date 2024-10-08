@@ -5,12 +5,12 @@
 <div class="row">
 
     <div class="col-auto">
-        <h4 class="mt-4">{{ table.paginator.count|intspace }} songs</h4>
+        <h4 class="mt-4">{{ table.paginator.count|intspace }} {{ facet }}</h4>
     </div>
 
     <div class="col-auto ms-auto text-end">
         <form class="row align-items-center g-3 filtering-form"
-              hx-get="{% url 'song_list' %}"
+              hx-get="{{ request.path }}"
               hx-target="#main-container"
               hx-swap="innerHTML">
             <div class="col-auto">
