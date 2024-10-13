@@ -1,11 +1,11 @@
 import logging
+import re
 from pathlib import Path
 
 import requests
 from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
-from django.core.paginator import EmptyPage, PageNotAnInteger, Paginator
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
@@ -14,6 +14,7 @@ from django_tables2 import SingleTableView
 
 from main.constants import GENRE_CHOICES
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
+from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import search_azlyrics
 from main.models import Album, Artist, Song
@@ -203,52 +204,6 @@ def artist_view(request: WSGIRequest, artist_id: int) -> HttpResponse:
     return render(request, 'main/partial_artist.html', ctx)
 
 
-def ranking_view(request, facet):
-    """Return ranking for whichever facet."""
-    current_song = get_object_or_404(Song, id=request.session.get('song_id'))
-    if facet == 'artists':
-        cls = Artist
-        prefetch = 'albums'
-    elif facet == 'albums':
-        cls = Album
-        prefetch = 'artist'
-    elif facet == 'songs':
-        cls = Song
-        prefetch = None
-    logger.info(f'Fetching ranking for {facet} on class {cls} and prefetching {prefetch}')
-    query = cls.objects
-    if prefetch:
-        query = query.prefetch_related(prefetch)
-    objs = query.order_by('-rating', '-count_played', '-count_rated').all()
-
-    # Add pagination logic
-    paginator = Paginator(objs, 50)
-    page = request.GET.get('page')
-
-    try:
-        paginated_objs = paginator.page(page)
-    except PageNotAnInteger:
-        paginated_objs = paginator.page(1)  # If page is not an integer, deliver first page.
-    except EmptyPage:
-        paginated_objs = paginator.page(
-            paginator.num_pages
-        )  # If page is out of range, deliver last page.
-
-    max_rating = max([a.rating for a in objs])
-    min_rating = min([a.rating for a in objs])
-    return render(
-        request,
-        f'main/partial_ranking_{facet}.html',
-        {
-            'facet': facet,
-            'objs': paginated_objs,
-            'current': current_song,
-            'max_rating': max_rating,
-            'min_rating': min_rating,
-        },
-    )
-
-
 class SongListView(SingleTableView, FilterMixin):
     model = Song
     ordering = ['-played_at']
@@ -340,26 +295,30 @@ def stats_graph_view(request, graph_name: str):
 
 def lyrics_view(request, song_id: int):
     """Show lyric."""
-    cache = True
     song = get_object_or_404(Song, id=song_id)
+    ctx = {'song': song}
     refresh = bool(request.GET.get('refresh'))
     instrument = bool(request.GET.get('instrument'))
+    url = request.GET.get('url')
 
     try:
-        lyrics = search_azlyrics(song, refresh, instrument)
+        lyrics = search_azlyrics(song, refresh, instrument, url)
     except (requests.RequestException, ValueError) as exc:
-        lyrics = str(exc)
-        cache = False
+        # Render the form with the exception message pre-filled in the input
+        ctx['error'] = str(exc)
+        form = URLForm(song_id=song.id)
+        ctx['form'] = form
+        match = re.search(r'url: (https?://[^\s]+)', str(exc))
+        original_url = match.group(1)
+        artist_name = original_url.split('/lyrics/')[1].split('/')[0]
+        first_letter = artist_name[0].lower()
+        lookup_url = f'https://www.azlyrics.com/{first_letter}/{artist_name}.html'
+        ctx['lookup_url'] = lookup_url
+        return render(request, 'main/partial_lyrics_url.html', ctx)
 
-    ctx = {
-        'lyrics': lyrics,
-        'current_song_id': request.session.get('song_id'),
-    }
+    ctx['lyrics'] = lyrics
     response = render(request, 'main/partial_lyrics.html', ctx)
-    if cache:
-        patch_cache_control(response, public=True, max_age=86400)
-    else:
-        logger.info('Not using cache for lyrics')
+    patch_cache_control(response, public=True, max_age=86400)
     return response
 
 

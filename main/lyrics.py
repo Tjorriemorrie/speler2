@@ -14,7 +14,6 @@ from unidecode import unidecode
 
 from main.constants import (
     AZLYRICS_ARTISTS,
-    AZLYRICS_SONGS,
     BILLBOARD_CHART_URLS,
 )
 from main.models import Billboard, Song
@@ -23,7 +22,7 @@ logger = logging.getLogger(__name__)
 
 
 def get_lyrics_chartlyrics(song: Song, use_cache: bool = True) -> str:
-    """Get .lyric_txt from chartlyricsa api."""
+    """Get lyrics from chartlyricsa api."""
     # Define file path to store lyrics in settings.LYRICS_DIR
     lyrics_file_path = Path(settings.LYRICS_DIR) / f'{song.artist.slug}-{song.slug}-{song.id}.txt'
     if lyrics_file_path.exists():
@@ -51,7 +50,7 @@ def get_lyrics_chartlyrics(song: Song, use_cache: bool = True) -> str:
     # Define the namespace
     namespace = {'ns': 'http://api.chartlyrics.com/'}
 
-    # Find the .lyric_txt with the namespace
+    # Find the lyrics with the namespace
     lyrics = root.find('.//ns:Lyric', namespace)
     artist_el = root.find('.//ns:LyricArtist', namespace)
     song_el = root.find('.//ns:LyricSong', namespace)
@@ -95,7 +94,9 @@ def clean_text_with_paragraphs(html_text):
     return clean_text
 
 
-def search_azlyrics(song: Song, refresh: bool = False, instrument: bool = False) -> str:
+def search_azlyrics(
+    song: Song, refresh: bool = False, instrument: bool = False, url: str = None
+) -> str:
     """Scrape AZ Lyrics."""
     artist_name = unidecode(song.artist.name.casefold())
     artist_name = re.sub(r'[^a-z0-9]', '', artist_name)
@@ -114,7 +115,7 @@ def search_azlyrics(song: Song, refresh: bool = False, instrument: bool = False)
     if instrument:
         lyrics = f'{artist_name} - {song_name}\n\n[Instrumental]'
     else:
-        lyrics_txt = scrape_azlyrics(artist_name, song_name)
+        lyrics_txt = scrape_azlyrics(artist_name, song_name, url)
         lyrics = clean_text_with_paragraphs(lyrics_txt)
 
     with Path.open(lyrics_file_path, 'w', encoding='utf-8') as file:
@@ -124,7 +125,7 @@ def search_azlyrics(song: Song, refresh: bool = False, instrument: bool = False)
     return lyrics
 
 
-def scrape_azlyrics(artist_name: str, song_name: str) -> str:
+def scrape_azlyrics(artist_name: str, song_name: str, url: str = None) -> str:
     """Search AZ lyrics for song."""
     # url = 'https://search.azlyrics.com/search.php'
     #
@@ -150,19 +151,17 @@ def scrape_azlyrics(artist_name: str, song_name: str) -> str:
     # url_page = first_row['href']
     # logger.info(f'AZLyrics: found page: {url_page}')
 
-    # Check if the name starts with 'the ' and remove it
-    if artist_name.startswith('the'):
-        artist_name = artist_name[3:]
-    if artist_name in AZLYRICS_ARTISTS:
-        artist_name = AZLYRICS_ARTISTS[artist_name]
-    # logger.info(f'AZLyrics: artist name: {artist_name}')
-
-    if song_name in AZLYRICS_SONGS:
-        song_name = AZLYRICS_SONGS[song_name]
-    # logger.info(f'AZLyrics: song name: {song_name}')
+    if url:
+        url_page = url
+    else:
+        # Check if the name starts with 'the ' and remove it
+        if artist_name.startswith('the'):
+            artist_name = artist_name[3:]
+        if artist_name in AZLYRICS_ARTISTS:
+            artist_name = AZLYRICS_ARTISTS[artist_name]
+        url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'
 
     # get lyrics
-    url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'
     res_l = requests.get(url_page, timeout=15)
     res_l.raise_for_status()
     soup = BeautifulSoup(res_l.content, 'html.parser')

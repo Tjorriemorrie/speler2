@@ -4,7 +4,7 @@
     <!------------ LYRICS ------------->
     <div class=" d-none col-lg-3 d-lg-block box-lyrics" id="lyrics-container">
         <a href="#"
-           hx-get="/lyrics/{{ current_song_id }}/"
+           hx-get="{% url 'lyric_view' current_song_id %}"
            hx-trigger="load"
            hx-target="#lyrics-container"
            hx-swap="innerHTML">
@@ -102,7 +102,7 @@
                             <td>{{ song|trck }}</td>
                             <td class="ellipsis">
                                 <a class="play-icon" href="#" style="font-size: 0.8em;"
-                                   hx-get="/lyrics/{{ song.id }}/"
+                                   hx-get="{% url 'lyric_view' song.id %}/"
                                    hx-target="#lyrics-container"
                                    hx-swap="innerHTML">
                                     <i class="bi bi-music-note-list"></i>
