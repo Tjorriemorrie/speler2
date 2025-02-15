@@ -1,6 +1,11 @@
+import logging
+
 from django.contrib import admin
 
 from main.models import Album, Artist, Billboard, History, Song
+from main.selectors import upkeep_album, upkeep_artist, upkeep_song
+
+logger = logging.getLogger(__name__)
 
 
 @admin.register(Artist)
@@ -11,7 +16,7 @@ class ArtistAdmin(admin.ModelAdmin):
 
 @admin.register(Album)
 class AlbumAdmin(admin.ModelAdmin):
-    list_display = ('name', 'slug', 'rating', 'artist_name', 'year', 'avg_played_at')
+    list_display = ('name', 'slug', 'rating', 'artist_name', 'year', 'avg_played_at', 'created_at')
     search_fields = ('name', 'artist__name')
 
     @admin.display()
@@ -20,9 +25,20 @@ class AlbumAdmin(admin.ModelAdmin):
         return album.artist.name
 
 
+@admin.action(description='Upkeep song stats')
+def upkeep_song_act(modeladmin, request, queryset):
+    """Upkeep song action."""
+    logger.info('Running upkeep song action...')
+    for obj in queryset:
+        upkeep_song(obj)
+        upkeep_album(obj.album)
+        upkeep_artist(obj.artist)
+
+
 @admin.register(Song)
 class SongAdmin(admin.ModelAdmin):
     list_display = (
+        'pk',
         'name',
         'rating',
         'album_name',
@@ -33,6 +49,7 @@ class SongAdmin(admin.ModelAdmin):
         'rel_path',
     )
     search_fields = ('name', 'album__name', 'artist__name')
+    actions = [upkeep_song_act]
 
     @admin.display()
     def album_name(self, song: Song):
@@ -47,7 +64,8 @@ class SongAdmin(admin.ModelAdmin):
 
 @admin.register(History)
 class HistoryAdmin(admin.ModelAdmin):
-    list_display = ('played_at', 'song_name')
+    list_display = ('played_at', 'song__id', 'song_name')
+    search_fields = ('song__id',)
 
     @admin.display()
     def song_name(self, history: History):

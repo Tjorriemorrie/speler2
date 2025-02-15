@@ -102,7 +102,7 @@
                             <td>{{ song|trck }}</td>
                             <td class="ellipsis">
                                 <a class="play-icon" href="#" style="font-size: 0.8em;"
-                                   hx-get="{% url 'lyric_view' song.id %}/"
+                                   hx-get="{% url 'lyric_view' song.id %}"
                                    hx-target="#lyrics-container"
                                    hx-swap="innerHTML">
                                     <i class="bi bi-music-note-list"></i>

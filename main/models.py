@@ -42,15 +42,15 @@ class Artist(Timestamp, Rank):
     count_songs = models.IntegerField(default=0)
     total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
-    played_at = models.DateTimeField(null=True)
-    avg_played_at = models.DateTimeField(null=True)
+    played_at = models.DateTimeField(null=True, blank=True)
+    avg_played_at = models.DateTimeField(null=True, blank=True)
     count_rated = models.IntegerField(default=0)
-    rated_at = models.DateTimeField(null=True)
+    rated_at = models.DateTimeField(null=True, blank=True)
     rating = models.FloatField(default=0)
 
     # classification
     genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
-    disco_at = models.DateTimeField(null=True)
+    disco_at = models.DateTimeField(null=True, blank=True)
 
     def __str__(self):
         txt = f'<Artist-{self.id} {self.name}>'
@@ -59,7 +59,9 @@ class Artist(Timestamp, Rank):
     @property
     def wiki_link(self) -> str:
         """Get wiki discography search link."""
-        params = {'search': f'{self.name.replace("-", "_")}_discography'}
+        if self.slug == 'blink-182':
+            return 'https://en.wikipedia.org/wiki/Blink-182'
+        params = {'search': f'{self.name.replace("-", "_")} discography'}
         url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
         return url
 
@@ -76,10 +78,10 @@ class Album(Timestamp, Rank):
     count_songs = models.IntegerField(default=0)
     total_length = models.FloatField()
     count_played = models.IntegerField(default=0)
-    played_at = models.DateTimeField(null=True)
-    avg_played_at = models.DateTimeField(null=True)
+    played_at = models.DateTimeField(null=True, blank=True)
+    avg_played_at = models.DateTimeField(null=True, blank=True)
     count_rated = models.IntegerField(default=0)
-    rated_at = models.DateTimeField(null=True)
+    rated_at = models.DateTimeField(null=True, blank=True)
     rating = models.FloatField(default=0)
 
     # classification
@@ -135,6 +137,7 @@ class History(Timestamp):
 
     class Meta:
         ordering = ['-played_at']
+        verbose_name_plural = 'Histories'
 
     def __str__(self):
         """Get str."""

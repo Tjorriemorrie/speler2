@@ -32,7 +32,7 @@
 .title-font {
     font-family: 'Calligraffiti', cursive;
     line-height: 2em;
-    padding: 0 0 0.3em 0.17em;
+    padding: 0 0 0.3em 0.4em;
     margin-left: -0.17em;
 }
 
@@ -122,7 +122,6 @@ html {
     font-size: 0.5em;
     display: block;
     line-height: 0;
-    padding-left: 0.1em;
     margin-top: -0.9em;
 }
 
@@ -462,4 +461,5 @@ a.play-icon {
     text-decoration: none !important;
     font-style: normal !important;
     color: inherit;
+    cursor: pointer;
 }

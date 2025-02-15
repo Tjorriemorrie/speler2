@@ -36,6 +36,10 @@ ALLOWED_HOSTS = [
     'localhost',
     '10.26.18.138',
     '192.168.1.100',
+    '192.168.1.101',
+    '192.168.1.102',
+    '192.168.1.103',
+    '192.168.1.105',
 ]
 
 
@@ -65,7 +69,7 @@ MIDDLEWARE = [
     'django.contrib.auth.middleware.AuthenticationMiddleware',
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
-    'main.middleware.timezone_middleware.TimezoneMiddleware',
+    'main.middlewares.TimezoneMiddleware',
 ]
 
 ROOT_URLCONF = 'speler2.urls'
@@ -219,3 +223,5 @@ LASTFM_API_KEY = env('LASTFM_API_KEY')
 LASTFM_SECRET = env('LASTFM_SECRET')
 LASTFM_ENABLE = bool(LASTFM_API_KEY and LASTFM_SECRET)
 LASTFM_SESSION_FILE = BASE_DIR / 'lastfm.session'
+
+HUGGING_FACE_API = env.str('HUGGING_FACE_API')

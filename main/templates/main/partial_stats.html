@@ -6,6 +6,20 @@
 
         <div class="row">
             <div class="col">
+                <div class="col">
+                    <a href="#"
+                       hx-get="/stats/graph/songs_by_date/"
+                       hx-trigger="load"
+                       hx-target="this"
+                       hx-swap="outerHTML">
+                    </a>
+                </div>
+            </div>
+        </div>
+
+
+        <div class="row">
+            <div class="col">
                 <a href="#"
                    hx-get="/stats/graph/album_ratings_by_year/"
                    hx-trigger="load"
@@ -17,15 +31,7 @@
 
 
         <div class="row">
-            <div class="col-12 col-lg-6 col-xl-4">
-                <a href="#"
-                   hx-get="/stats/graph/songs_by_date/"
-                   hx-trigger="load"
-                   hx-target="this"
-                   hx-swap="outerHTML">
-                </a>
-            </div>
-            <div class="col-12 col-lg-6 col-xl-4">
+            <div class="col-12 col-lg-6 col-xl-6">
                 <a href="#"
                    hx-get="/stats/graph/play_count/"
                    hx-trigger="load"
@@ -33,7 +39,7 @@
                    hx-swap="outerHTML">
                 </a>
             </div>
-            <div class="col-12 col-lg-6 col-xl-4">
+            <div class="col-12 col-lg-6 col-xl-6">
                 <a href="#"
                    hx-get="/stats/graph/albums_per_artist/"
                    hx-trigger="load"

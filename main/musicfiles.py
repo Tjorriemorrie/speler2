@@ -7,6 +7,7 @@ from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, FloatField, Max, Sum
 from django.db.models.functions import Cast
+from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.timezone import make_aware
 from mutagen import id3, mp3, mp4
@@ -52,14 +53,17 @@ def scan_directory(*args, **kwargs):
     artists = set()
     for album in albums:
         album.count_songs = album.songs.count()
+        if not album.total_tracks:
+            album.count_songs = album.total_tracks
         album.total_length = album.songs.aggregate(Sum('track_length'))['track_length__sum']
         album.save()
         artists.add(album.artist)
-        logger.info(f'Updated album {album.name}: count_songs={album.count_songs}')
+        logger.info(unidecode(f'Updated album {album.name}: count_songs={album.count_songs}'))
     for artist in artists:
         artist.count_albums = artist.albums.count()
         artist.count_songs = artist.songs.count()
         artist.total_length = artist.albums.aggregate(Sum('total_length'))['total_length__sum']
+        artist.disco_at = timezone.now()
         logger.info(
             f'Updated artist {unidecode(artist.name)}: '
             f'count_albums={artist.count_albums} count_songs={artist.count_songs}'
@@ -73,7 +77,7 @@ def add_new_audio_file(
     file_path: Path, rel_path: str, song_slug: str, missing_audio_files: List[Song]
 ) -> Song:
     """Add new Artist, Album and Song after parsing ID3 metadata."""
-    logger.info(f'Adding new {file_path}')
+    logger.info(unidecode(f'Adding new {file_path}'))
     metadata = parse_id3_tag(file_path.resolve())
 
     # check if song file is renamed
@@ -106,7 +110,7 @@ def add_new_audio_file(
             'artist': artist,
             'name': metadata['album_name'],
             'year': metadata['year'],
-            'total_tracks': metadata['total_tracks'],
+            'total_tracks': metadata.get('total_tracks') or 0,
             'total_discs': metadata['total_discs'],
             'total_length': 0,
             'genre': artist.genre,
@@ -141,7 +145,7 @@ def add_new_audio_file(
 
 def parse_id3_tag(file_path: str) -> dict:
     """Get metadata based on file type."""
-    logger.info(f'Parsing ID3 tag for {file_path}')
+    logger.info(unidecode(f'Parsing ID3 tag for {file_path}'))
     if file_path.suffix == '.mp3':
         metadata = get_mp3_metadata(file_path)
     elif file_path.suffix == '.m4a':

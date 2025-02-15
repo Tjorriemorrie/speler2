@@ -35,7 +35,7 @@ class Command(BaseCommand):
             api_key=settings.LASTFM_API_KEY, api_secret=settings.LASTFM_SECRET
         )
 
-        if not settings.LASTFM_SESSION_FILE.exists():
+        if True or not settings.LASTFM_SESSION_FILE.exists():
             # Generate the authorization URL
             skg = pylast.SessionKeyGenerator(network)
             url = skg.get_web_auth_url()

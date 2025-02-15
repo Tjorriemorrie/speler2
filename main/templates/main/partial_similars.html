@@ -1,39 +1,74 @@
 {% load fmt %}
+
 <div class="row">
     <div class="col">
 
         <h3>Similars</h3>
         <h6>Find similar artists to what you already listen to.</h6>
 
-        <h5 class="my-3">
-            <a class="no-blue me-3" href="{{ album_details.0.wiki_link }}" target="_blank">
-                <i class="bi bi-wikipedia"></i>
-            </a>
-            <a class="no-blue artist-font" href="#"
-               hx-get="/artist/{{ album_details.0.id }}/"
-               hx-trigger="click"
-               hx-target="#main-container"
-               hx-swap="innerHTML">
-                {{ album_details.0.name }}
-            </a>
-            {% if album_details|length > 2 and album_details.2 %}
-                is missing studio album
-                <a class="no-blue" href="{{ album_details.2 }}" target="_blank">
-                    {{ album_details.1 }}
-                </a>
-            {% elif album_details|length > 1 and album_details.1 %}
-                is missing studio album
-                {{ album_details.1 }}
-            {% else %}
-                has all studio albums
-            {% endif %}
-        </h5>
+        <div class="row">
 
-        {% if not grouped_similars %}
-            <p>No artists data found.</p>
-        {% else %}
-            <div class="row">
-                <div class="col-6">
+            <!-- Missing albums on existing -->
+            <div class="col-3">
+                <h3>
+                    Album details
+                    <span class="no-blue" href="#" title="Refresh"
+                          hx-get="{% url 'similars' %}?refresh=ad"
+                          hx-trigger="click"
+                          hx-target="#main-container"
+                          hx-swap="innerHTML">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </span>
+
+                </h3>
+                {% if wiki_details.artist %}
+                    <h5 class="my-3">
+                        <a class="no-blue" href="{{ wiki_details.artist.wiki_link }}" target="_blank">
+                            <i class="bi bi-wikipedia"></i>
+                        </a>
+                        <a class="no-blue artist-font" href="#"
+                           hx-get="{% url 'artist' wiki_details.artist.id %}"
+                           hx-trigger="click"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            {{ wiki_details.artist.name }}
+                        </a>
+                    </h5>
+                {% endif %}
+                {% if wiki_details.error %}
+                    <div class="alert alert-danger">
+                        {{ wiki_details.error }}
+                    </div>
+                {% endif %}
+                {% for album_info in wiki_details.albums %}
+                    <p>
+                        {% if album_info.own %}
+                            <i class="bi bi-check"></i>
+                        {% else %}
+                            <i class="bi bi-x"></i>
+                        {% endif %}
+                        {{ album_info.year }} - {{ album_info.name }}
+                        {% if album_info.href %}<a href="{{ album_info.href }}" target="_blank">Link</a>{% endif %}
+                    </p>
+                {% endfor %}
+            </div>
+
+
+            <!-- Similar artists from lastfm -->
+            <div class="col-4">
+                <h3>
+                    New, similar artists to artists already in the library.
+                    <span class="no-blue" href="#" title="Refresh"
+                          hx-get="{% url 'similars' %}?refresh=gs"
+                          hx-trigger="click"
+                          hx-target="#main-container"
+                          hx-swap="innerHTML">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </span>
+                </h3>
+                {% if not grouped_similars %}
+                    <p>No artists data found.</p>
+                {% else %}
                     <table class="table table-sm table-striped table-hover mt-1">
                         <thead>
                         <tr>
@@ -58,9 +93,68 @@
                         {% endfor %}
                         </tbody>
                     </table>
-                </div>
+                {% endif %}
             </div>
-        {% endif %}
+
+
+            <!-- bad albums to be removed -->
+            <div class="col-5">
+                <h3>
+                    Albums that were played last on average.
+                    <span class="no-blue" href="#" title="Refresh"
+                          hx-get="{% url 'similars' %}?refresh=lp"
+                          hx-trigger="click"
+                          hx-target="#main-container"
+                          hx-swap="innerHTML">
+                        <i class="bi bi-arrow-clockwise"></i>
+                    </span>
+                </h3>
+                <h6>Albums that have been played fully and is last played earlier than the
+                    average are good candidates to remove.</h6>
+                {% if not last_played %}
+                    <p>No avg last played albums</p>
+                {% else %}
+                    <table class="table table-sm table-striped table-hover mt-1">
+                        <thead>
+                        <tr>
+                            <th>Album</th>
+                            <th>Artist</th>
+                            <th>Avg played at</th>
+                            <th>2nd Chance</th>
+                        </tr>
+                        </thead>
+                        <tbody>
+                        {% for album in last_played %}
+                            <tr>
+                                <td>
+                                    <a href="#" class="no-blue"
+                                       hx-get="{% url 'album' album.id %}"
+                                       hx-target="#main-container"
+                                       hx-swap="innerHTML">
+                                        <img class="img-fluid" style="height: 1.6em;"
+                                             src="{% url 'album_art' album.songs.first.id %}"/>
+                                        {{ album.name }}
+                                    </a>
+                                </td>
+                                <td>
+                                    <a href="#" class="no-blue"
+                                       hx-get="{% url 'artist' album.artist.id %}"
+                                       hx-target="#main-container"
+                                       hx-swap="innerHTML">
+                                        {{ album.artist.name }}
+                                    </a>
+                                </td>
+                                <td>{{ album|played_at_over }}</td>
+                                <td>{{ album|one_play_cnt }}</td>
+                            </tr>
+                        {% endfor %}
+                        </tbody>
+                    </table>
+                {% endif %}
+            </div>
+
+
+        </div>
 
     </div>
 </div>

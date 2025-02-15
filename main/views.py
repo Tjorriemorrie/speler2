@@ -1,5 +1,6 @@
 import logging
 import re
+from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -12,7 +13,7 @@ from django.utils.cache import patch_cache_control
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 
-from main.constants import GENRE_CHOICES
+from main.constants import GENRE_CHOICES, RATINGS_WINDOW
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
@@ -27,6 +28,7 @@ from main.selectors import (
     get_play_count_chart,
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
+    list_lowest_rated_albums,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -42,6 +44,16 @@ def home_view(request: WSGIRequest):
 def next_song_view(request: WSGIRequest):  # noqa: PLR0912
     """Return next song."""
     last_song_id = request.session.get('song_id')
+    song_timestamp = request.session.get('song_timestamp')
+
+    # Check if `song_id` exists and is older than 15 minutes
+    if last_song_id and song_timestamp:
+        song_time = datetime.fromisoformat(song_timestamp)
+        time_diff = (datetime.now() - song_time).total_seconds()
+        if time_diff > RATINGS_WINDOW:
+            logger.info(f'Clearing song ID {last_song_id} older than {RATINGS_WINDOW} minutes.')
+            last_song_id = None
+
     if last_song_id:
         try:
             song = Song.objects.get(id=last_song_id)
@@ -85,6 +97,7 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912
 
     # store for matches and history
     request.session['song_id'] = next_song.id
+    request.session['song_timestamp'] = datetime.now().isoformat()
 
     # Check if filter_facet is not None and has at least one item
     if filter_facet := cache.get('filter_facet'):
@@ -193,7 +206,7 @@ def artist_view(request: WSGIRequest, artist_id: int) -> HttpResponse:
     """Get artist details."""
     artist = get_object_or_404(Artist, id=artist_id)
     albums = artist.albums.order_by('year').all()
-    percentile = 0.10
+    percentile = 0.15
     songs = get_top_percentile_songs(artist, percentile)
     ctx = {
         'artist': artist,
@@ -309,12 +322,15 @@ def lyrics_view(request, song_id: int):
         form = URLForm(song_id=song.id)
         ctx['form'] = form
         match = re.search(r'url: (https?://[^\s]+)', str(exc))
-        original_url = match.group(1)
-        artist_name = original_url.split('/lyrics/')[1].split('/')[0]
-        first_letter = artist_name[0].lower()
-        lookup_url = f'https://www.azlyrics.com/{first_letter}/{artist_name}.html'
-        ctx['lookup_url'] = lookup_url
-        return render(request, 'main/partial_lyrics_url.html', ctx)
+        try:
+            original_url = match.group(1)
+            artist_name = original_url.split('/lyrics/')[1].split('/')[0]
+            first_letter = artist_name[0].lower()
+            lookup_url = f'https://www.azlyrics.com/{first_letter}/{artist_name}.html'
+            ctx['lookup_url'] = lookup_url
+        except AttributeError:
+            ctx['lookup_url'] = 'https://www.azlyrics.com'
+        return render(request, 'main/partial_lyrics.html', ctx)
 
     ctx['lyrics'] = lyrics
     response = render(request, 'main/partial_lyrics.html', ctx)
@@ -366,17 +382,34 @@ def genre_view(request, facet: str, facet_id: int, genre: str):
 
 def similars_view(request):
     """Get artist to review and new bands from LastFM."""
-    album_details = scrape_studio_albums()
+    ctx = {}
+    refresh = request.GET.get('refresh')
 
-    try:
-        grouped_similars = update_next_similar_artist()
-    except NotImplementedError as exc:
-        return HttpResponse(str(exc))
+    album_details_key = 'sim_album_details'
+    refresh_ad = refresh == 'ad'
+    if refresh_ad or not (wiki_details := cache.get(album_details_key)):
+        try:
+            wiki_details = scrape_studio_albums(refresh=refresh_ad)
+            cache.set(album_details_key, wiki_details, timeout=3600 * 16)
+        except Exception as exc:
+            logger.exception('Could not find album details')
+            wiki_details = {'error': str(exc)}
+    ctx['wiki_details'] = wiki_details
 
-    ctx = {
-        'album_details': album_details,
-        'grouped_similars': grouped_similars,
-    }
+    grouped_similar_key = 'sim_grouped_similar'
+    if refresh == 'gs' or not (grouped_similars := cache.get(grouped_similar_key)):
+        try:
+            grouped_similars = update_next_similar_artist()
+        except NotImplementedError as exc:
+            return HttpResponse(str(exc))
+        cache.set(grouped_similar_key, grouped_similars, timeout=3600 * 16)
+    ctx['grouped_similars'] = grouped_similars
+
+    last_played_key = 'sim_last_played'
+    if refresh == 'lp' or not (last_played := cache.get(last_played_key)):
+        last_played = list_lowest_rated_albums()
+        cache.set(last_played_key, last_played, timeout=3600 * 16)
+    ctx['last_played'] = last_played
+
     response = render(request, 'main/partial_similars.html', ctx)
-    # patch_cache_control(response, public=True, max_age=86400)
     return response

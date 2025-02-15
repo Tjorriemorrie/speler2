@@ -1,3 +1,5 @@
+{% load crispy_forms_tags %}
+
 <span class="instrument" href="#" title="Set song as instrumental only"
       hx-get="{% url 'lyric_view' song.id %}?instrument=1"
       hx-trigger="click"
@@ -13,6 +15,17 @@
         <i class="bi bi-arrow-clockwise"></i>
 </span>
 
-    <div class="lyrics-font">
-    {{ lyrics|linebreaks }}
+<div class="lyrics-font">
+    {% if error %}
+
+        <h6>Retry Fetching Lyrics</h6>
+        <p>{{ error }}</p>
+        <p><a href="{{ lookup_url }}" target="_blank">lookup song url...</a></p>
+        {% crispy form %}
+
+    {% else %}
+
+        {{ lyrics|linebreaks }}
+
+    {% endif %}
 </div>

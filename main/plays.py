@@ -12,10 +12,10 @@ from django.utils import timezone
 from django.utils.timezone import make_aware
 from unidecode import unidecode
 
-from main.constants import LIST_GENRES, RATINGS_WINDOW
+from main.constants import LIST_GENRES
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
-from main.selectors import get_recent_artist_ids
+from main.selectors import get_recent_artists
 
 logger = logging.getLogger(__name__)
 
@@ -57,26 +57,40 @@ def get_next_song() -> Song:
 
     # Get the song with the highest priority
     # but exclude recent artist, to prevent single artist spam
-    limit = RATINGS_WINDOW // 60
-    recent_artist_ids = get_recent_artist_ids()
-    songs = list(songs_with_priority.all()[:limit])  # Query once and store in memory
+    queue = defaultdict(int)
+    history_artists = get_recent_artists()
+    for history_artist in reversed(history_artists):
+        queue[history_artist.song.artist.name] = 0
+
+    # Query once and store in memory (for rnd)
+    limit = 100
+    songs = list(songs_with_priority.all()[:50])
     next_song = None
-    artists_already_played = defaultdict(int)
     # Iterate over the songs and check if the artist was recently played
     for song in songs:
-        if song.artist.id not in recent_artist_ids:
-            next_song = song  # Found a valid song, assign it
-            break
-        artists_already_played[song.artist.name] += 1
-    if artists_already_played:
-        aap_str = ', '.join(f'{k} (x{v})' for k, v in artists_already_played.items())
-        logger.info(f'>>>>>>>>>> Already played: {unidecode(aap_str)}')
+        if not next_song:
+            if song.artist.name not in queue:
+                next_song = song
+                queue[song.artist.name] = 0
+                # logger.info(f'Found next song {next_song}')
+            else:
+                queue[song.artist.name] += 1
+                # logger.info(f'Increased existing artist on queue {unidecode(song.artist.name)}')
+        elif song.artist.name in queue:
+            queue[song.artist.name] += 1
+            # logger.info(f'Has next song, but increasing artist already in queue afterwards: {unidecode(song.artist.name)}')
+
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
-        logger.info('Could not find any unplayed artist in first 100 priority queue!')
+        logger.info(f'{"!"*5} Could not find any unplayed artist in first {limit} priority queue!')
         next_song = random.choice(songs)  # noqa: S311
     if not next_song:
         raise ValueError('Expected to get a song, but found nothing')
+
+    for name, cnt in queue.items():
+        symbol = '>' if next_song.artist.name == name else '-'
+        cnt_txt = f'+++ {cnt}' if cnt else ''
+        logger.info(f'{symbol*5} {unidecode(name)} {cnt_txt}')
 
     logger.info(f'Next Song: {next_song}')
     # playd = next_song.count_played / max_played
@@ -173,7 +187,7 @@ def get_next_song_priority_values() -> Tuple[float, float]:
 
     # adjust the earliest day to prevent spam of top hits
     # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
-    adj = 1.60
+    adj = 2.0
     adj_earliest_julian_diff = earliest_julian_diff * adj
     diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)
     logger.info(

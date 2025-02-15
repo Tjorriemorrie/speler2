@@ -1,16 +1,18 @@
+import datetime
 import logging
+import re
 
+import pylast
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.core.cache import cache
 from django.db.models import F, Max, Sum
 from django.utils import timezone
 from django.utils.text import slugify
 from pylast import LastFMNetwork
 from unidecode import unidecode
 
-from main.models import Album, Artist, History, Similar
+from main.models import Artist, History, Similar
 
 logger = logging.getLogger(__name__)
 
@@ -28,17 +30,20 @@ def scrobble(history: History):
     """Scrobble history."""
     if not settings.LASTFM_ENABLE:
         return
+    logger.info(f'Scrobbling {history}')
     song = history.song
     timestamp = int(history.played_at.timestamp())
     network = get_network()
-    network.scrobble(
-        artist=song.artist.name,
-        title=song.name,
-        timestamp=timestamp,
-        album=song.album.name,
-        track_number=song.track_number,
-    )
-    logger.info(f'Scrobbled {history}')
+    try:
+        network.scrobble(
+            artist=song.artist.name,
+            title=song.name,
+            timestamp=timestamp,
+            album=song.album.name,
+            track_number=song.track_number,
+        )
+    except pylast.NetworkError:
+        logger.error('Timeout connecting to LastFM')
 
 
 def update_next_similar_artist():
@@ -50,12 +55,14 @@ def update_next_similar_artist():
     sim_artist_ids = Similar.objects.values('artist_id')
     next_artist = Artist.objects.exclude(id__in=sim_artist_ids).order_by('-rating').first()
 
+    # clear existing rows
+    cnt = Similar.objects.filter(artist=next_artist).delete()
+
     if next_artist:
         logger.info(f'Getting similar artists for {next_artist}')
         network = get_network()
         lastfm_artist = network.get_artist(next_artist.name)
         similar_artists = lastfm_artist.get_similar(limit=100)
-        logger.info(f'Processing {len(similar_artists)}...')
         for similar_artist, match in similar_artists:
             sim_artist_name = similar_artist.get_name()
             sim_artist_slug = slugify(unidecode(sim_artist_name))
@@ -77,9 +84,10 @@ def update_next_similar_artist():
         Similar.objects.exclude(artist_slug__in=excluded_slugs)
         .values('artist_slug')
         .annotate(total_score=Sum('score'), artist_name=Max('artist_name'))
-        .order_by('-total_score')
+        .order_by('-total_score')[:10]
     )
 
+    logger.info(f'Similar artists updated for {next_artist} (removed {cnt[0]})')
     return grouped_artists
 
 
@@ -140,49 +148,172 @@ def update_next_similar_artist():
 BAD_ALBUMS = ['Seether Disclaimer II', 'Nightwish Human. :II: Nature.']
 
 
-def scrape_studio_albums():
+def scrape_studio_albums(refresh: bool = False) -> dict:
     """Scrapes studio album names and their links from a Wikipedia discography page."""
-    cache_key = 'wiki_studio_albums'
-    if album_details := cache.get(cache_key):
-        logger.info(f'Cache found for {album_details}')
-        return album_details
+    artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True), 'count_albums').first()
+    # update timestamp
+    if refresh:
+        logger.info(f'Marked {artist.name} discography as scraped.')
+        artist.disco_at = timezone.now() + datetime.timedelta(days=30 * artist.count_albums)
+        artist.save()
+        artist = Artist.objects.order_by(
+            F('disco_at').asc(nulls_first=True), 'count_albums'
+        ).first()
 
-    artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True)).first()
-    logger.info(f'Fetching studio albums from {artist.wiki_link}')
-    response = requests.get(artist.wiki_link, timeout=10)
+    wiki_details = {
+        'artist': artist,
+        'albums': [],
+    }
+    logger.info(f'Fetching {artist.name} studio albums from {artist.wiki_link}')
+
+    # try getting discography from band page
+    url = artist.wiki_link
+    url = url.replace('discography', '').strip()
+    response = requests.get(url, timeout=20)
     response.raise_for_status()
     soup = BeautifulSoup(response.content, 'html.parser')
-    album_tables = soup.find_all('table', {'class': 'wikitable'})
-    if not album_tables:
-        album_details = (artist, ': cannot read wiki page')
-    else:
-        for row in album_tables[0].find_all('tr')[2:]:
-            th_cell = row.find('th')
-            if not th_cell:
-                logger.info(f'No th header for: {row.text}')
-                continue  # "—" denotes a release that did not chart or was not issued in that
-            album_title = th_cell.get_text()
-            if th_anchor := th_cell.find('a'):
-                album_link = f"https://en.wikipedia.org{th_anchor['href']}"
-            else:
-                album_link = None
 
-            album_slug = f'{artist.slug}-{slugify(unidecode(album_title))}'
+    # if 'does not exist.' in soup.text:
+    #     url += ' (band)'
+    #     response = requests.get(url, timeout=10)
+    #     response.raise_for_status()
+    #     soup = BeautifulSoup(response.content, 'html.parser')
+    #     if 'does not exist.' in soup.text:
+    #         raise ValueError('Unknown page')
+
+    try:
+        disc_tag = soup.find('h2', id='Discography').parent
+    except AttributeError:
+        try:
+            disc_tag = soup.find('h2', id='Solo_discography').parent
+        except AttributeError:
+            url += '(band)'
+            response = requests.get(url, timeout=20)
+            response.raise_for_status()
+            soup = BeautifulSoup(response.content, 'html.parser')
             try:
-                artist.albums.get(slug=album_slug)
-                logger.info(f'Studio album exists: {album_title}')
-            except Album.DoesNotExist:
-                logger.info(f'Missing album found: {album_title}')
-                if f'{artist.name} {album_title}' in BAD_ALBUMS:
-                    logger.info(f'Ignoring album {album_title}')
-                    continue
-                album_details = (artist, album_title, album_link)
-                cache.set(cache_key, album_details, timeout=3600)
-                break
-        else:
-            album_details = (artist,)
-            logger.info(f'No missing studio albums found for {artist}')
+                disc_tag = soup.find('h2', id='Discography').parent
+            except AttributeError:
+                raise ValueError(f'Cannot find discography for {artist.name}')
 
-    artist.disco_at = timezone.now()
-    artist.save()
-    return album_details
+    subheading_tag = None
+    for wording in ['Studio', 'Main article']:
+        subheading_tmp = disc_tag.next_sibling
+        i = 0
+        while not subheading_tag and subheading_tmp and i < 3:
+            i += 1
+            if subheading_tmp.text and wording in subheading_tmp.text:
+                subheading_tag = subheading_tmp
+            else:
+                subheading_tmp = subheading_tmp.next_sibling
+    if not subheading_tag:
+        subheading_tag = disc_tag
+        # raise ValueError('Expected Studio albums listing')
+
+    wrapper_tag = subheading_tag.next_sibling.next_sibling
+    if wrapper_tag.name not in ['table', 'ul']:
+        # Find all relevant tags after the current tag
+        for tag in wrapper_tag.find_all_next():
+            # Stop if we encounter the next <h2>
+            if tag.name == 'h2':
+                break
+            # Return the first <table> or <ul>
+            if tag.name in ['table', 'ul']:
+                wrapper_tag = tag
+                break
+
+    if wrapper_tag.name == 'table':
+        for tr in wrapper_tag.find_all('tr'):
+            tds = tr.find_all('td', recursive=False)
+            if not tds or len(tds) < 2:
+                continue  # th row
+            cells = tr.find_all(['td', 'th'], recursive=False)
+            # first cell is year
+            if len(cells[0].get_text(separator=' ', strip=True)) == 4:
+                anchor = cells[1].find('a')
+                name = cells[1].get_text(separator=' ', strip=True)
+                name = name.split('Released:')[0].strip()
+                year = cells[0].get_text(strip=True)
+            # else first name then year
+            else:
+                anchor = cells[0].find('a')
+                name = cells[0].get_text(separator='\n', strip=True).split('\n')[0]
+                try:
+                    year_txt = cells[1].get_text(separator=' ', strip=True)
+                    year = re.search(r'\b\d{4}\b', year_txt).group()
+                except AttributeError:  # trust company has release in first cell below name
+                    year_txt = cells[0].get_text(separator='\n', strip=True).split('\n')[1]
+                    year = re.search(r'\b\d{4}\b', year_txt).group()
+
+            wiki_details['albums'].append(
+                {
+                    'year': year,
+                    'name': name,
+                    'href': ('https://en.wikipedia.org' + anchor['href']) if anchor else None,
+                }
+            )
+    elif wrapper_tag.name == 'ul':
+        for li in wrapper_tag.find_all('li', recursive=False):
+            name_txt = li.get_text(separator=' ', strip=True)
+            name = name_txt.split('(')[0]
+            year = re.search(r'(\d{4})', li.text).group(1)
+            anchor = li.find('a')
+            wiki_details['albums'].append(
+                {
+                    'year': year,
+                    'name': name.strip(),
+                    'href': ('https://en.wikipedia.org' + anchor['href']) if anchor else None,
+                }
+            )
+    else:
+        raise ValueError(f'Unknown tag for wrapper {wrapper_tag.name}')
+    # album_details['error'] = 'cannot read wiki page'
+
+    # strip year prefix from name
+    for album_info in wiki_details['albums']:
+        if album_info['name'].startswith(album_info['year']):
+            album_info['name'] = album_info['name'][5:]
+
+    # response = requests.get(artist.wiki_link, timeout=10)
+    # response.raise_for_status()
+    # soup = BeautifulSoup(response.content, 'html.parser')
+    # album_tables = soup.find_all('table', {'class': 'wikitable'})
+    #
+    # if not album_tables:
+    #
+    # else:
+    #     for row in album_tables[0].find_all('tr')[2:]:
+    #         th_cell = row.find('th')
+    #         if not th_cell:
+    #             logger.info(f'No th header for: {row.text}')
+    #             continue  # "—" denotes a release that did not chart or was not issued in that
+    #         album_title = th_cell.get_text()
+    #         if th_anchor := th_cell.find('a'):
+    #             album_link = f"https://en.wikipedia.org{th_anchor['href']}"
+    #         else:
+    #             album_link = None
+    #
+    #         album_slug = f'{artist.slug}-{slugify(unidecode(album_title))}'
+    #         try:
+    #             artist.albums.get(slug=album_slug)
+    #             logger.info(f'Studio album exists: {album_title}')
+    #         except Album.DoesNotExist:
+    #             logger.info(f'Missing album found: {album_title}')
+    #             if f'{artist.name} {album_title}' in BAD_ALBUMS:
+    #                 logger.info(f'Ignoring album {album_title}')
+    #                 continue
+    #             wiki_details['title'] = album_title
+    #             wiki_details['link'] = album_link
+    #             break
+    #     else:
+    #         wiki_details['error'] = 'No missing studio albums found'
+    #         logger.info(f'No missing studio albums found for {artist}')
+
+    logger.info(f'Successfully scraped {len(wiki_details["albums"])} albums for {artist}')
+
+    # match albums
+    album_names = {a.name for a in artist.albums.all()}
+    for album_info in wiki_details['albums']:
+        album_info['own'] = album_info['name'] in album_names
+
+    return wiki_details

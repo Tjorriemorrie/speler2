@@ -42,8 +42,11 @@ BILLBOARD_CHART_URLS = {
 }
 
 AZLYRICS_ARTISTS = {
+    'adaytoremember': 'daytoremember',
     'aperfectcircle': 'perfectcircle',
     'matchboxtwenty': 'matchbox20',
+    # 'smashingpumpkins': 'smashing',
+    'oryofadeadman': 'theoryofadeadman',
     'thirtysecondstomars': '30secondstomars',
     'u2': 'u2band',
 }

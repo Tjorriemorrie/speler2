@@ -1,15 +1,19 @@
 import logging
+from datetime import datetime
 from random import randint
 from typing import List
 
 import plotly.graph_objects as go
 from django.core.cache import cache
-from django.db.models import Count, Sum
+from django.db import connection
+from django.db.models import Avg, Count, F, Max, Q, QuerySet, Sum
+from django.db.models.expressions import RawSQL
 from django.db.models.functions import TruncDate
 from django.utils import timezone
+from django.utils.timezone import make_aware
 
 from main.constants import RATINGS_WINDOW
-from main.models import Album, Artist, History, Song
+from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
@@ -192,15 +196,110 @@ def get_top_percentile_songs(artist: Artist, percentile: float) -> List[Song]:
     return top_songs
 
 
-def get_recent_artist_ids():
-    """Get recent artist IDS."""
+def get_recent_artists() -> QuerySet[History]:
+    """Get recent artists."""
     # Calculate the time window (40 minutes ago)
     time_threshold = timezone.now() - timezone.timedelta(seconds=RATINGS_WINDOW)
 
     # Query the History model for songs played in the time window
     recent_histories = History.objects.filter(played_at__gte=time_threshold)
 
-    # Retrieve a flat list of distinct artist IDs
-    artist_ids = recent_histories.values_list('song__artist__id', flat=True).distinct()
+    return recent_histories
 
-    return list(artist_ids)
+
+def get_avg_last_albums():
+    """Get last albums by avg played."""
+    return Album.objects.order_by(F('avg_played_at').asc(nulls_last=True))[:10]
+
+
+def list_lowest_rated_albums():
+    """Get last albums by lowest rating."""
+    return Album.objects.exclude(rating__isnull=True).order_by('rating')[:10]
+
+
+def get_avg_played_at():
+    """Calculate the average played_at for all songs using raw SQL."""
+    cache_key = 'global_avg_played_at'
+    if dt := cache.get(cache_key):
+        return dt
+
+    with connection.cursor() as cursor:
+        # Write the SQL query to get the average of UNIX timestamps
+        cursor.execute("""
+            SELECT AVG(strftime('%s', played_at))
+            FROM main_song
+            WHERE played_at IS NOT NULL
+        """)
+
+        # Fetch the result (this will be the average UNIX timestamp)
+        avg_played_timestamp = cursor.fetchone()[0]
+
+    # If there is no valid result, return None
+    if avg_played_timestamp is None:
+        return None
+
+    # Convert the UNIX timestamp back to a datetime object
+    avg_played_at = make_aware(datetime.fromtimestamp(float(avg_played_timestamp)))
+    cache.set(cache_key, avg_played_at, timeout=3600 * 16)  # 16 hours
+    return avg_played_at
+
+
+def upkeep_song(song: Song):
+    """Ensure stats are correct on song."""
+    # first handle plays
+    song.count_played = song.histories.count()
+    song.played_at = song.histories.aggregate(Max('played_at'))['played_at__max']
+
+    # lastly handle ratings
+    ratings = Rating.objects.filter(Q(winner=song) | Q(loser=song))
+    count_wins = Rating.objects.filter(winner=song).count()
+    song.count_rated = ratings.count()
+    song.rated_at = ratings.aggregate(Max('rated_at'))['rated_at__max']
+    song.rating = count_wins / ratings.count()
+
+    logger.info(f'Upkept {song}')
+    song.save()
+
+
+def upkeep_album(album: Album):
+    """Ensure stats are correct on album."""
+    # first handle plays
+    album.count_played = album.songs.aggregate(Sum('count_played'))['count_played__sum']
+    album.played_at = album.songs.aggregate(Max('played_at'))['played_at__max']
+    # Convert 'played_at' to a Unix timestamp using SQLite's strftime
+    avg_played_at = album.songs.aggregate(
+        avg_played_at=Avg(RawSQL("strftime('%%s', played_at)", []))
+    )['avg_played_at']
+    album.avg_played_at = (
+        make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+    )
+
+    # lastly handle ratings
+    album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
+    album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
+    album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
+
+    album.save()
+    logger.info(f'Upkept {album}')
+
+
+def upkeep_artist(artist: Artist):
+    """Ensure stats are correct on artist."""
+    # first handle plays
+    artist.count_played = artist.albums.aggregate(Sum('count_played'))['count_played__sum']
+    artist.played_at = artist.albums.aggregate(Max('played_at'))['played_at__max']
+    # Convert 'played_at' to a Unix timestamp using SQLite's strftime
+    avg_played_at = artist.songs.aggregate(
+        avg_played_at=Avg(RawSQL("strftime('%%s', played_at)", []))
+    )['avg_played_at']
+    artist.avg_played_at = (
+        make_aware(datetime.fromtimestamp(avg_played_at)) if avg_played_at else None
+    )
+
+    # lastly handle ratings
+    artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
+    artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
+    artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
+
+    artist.save()
+    logger.info(f'Upkept {artist}')

@@ -5,7 +5,8 @@ from django import template
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 
-from main.models import Song
+from main.models import Album, Song
+from main.selectors import get_avg_played_at
 
 register = template.Library()
 
@@ -105,7 +106,14 @@ def days_ago(value):
     day = value.day  # Get the day without leading zero
     month = value.strftime('%b')  # Get the abbreviated month
     date_str = f'{day} {month}'  # Combine day and month
-    return f'{delta.days} days ago ({date_str})'
+
+    if delta.days <= 90:
+        dur_repr = delta.days
+        dur_per = 'days'
+    else:
+        dur_repr = round(delta.days / 30, 0)
+        dur_per = 'months'
+    return f'{dur_repr:.0f} {dur_per} ago ({date_str})'
 
 
 @register.filter
@@ -116,3 +124,26 @@ def intspace(value):
         return '{:n}'.format(int(value)).replace(',', ' ').replace('.', ',')
     except (ValueError, TypeError):
         return value
+
+
+@register.filter
+def one_play_cnt(album: Album) -> str:
+    """Get songs on album with 1 play count."""
+    cnt = album.songs.filter(count_played=1).count()
+    if cnt:
+        return mark_safe(f'<i class="bi bi-x"></i> {cnt} remaining')
+    else:
+        return mark_safe('<i class="bi bi-check"></i>')
+
+
+@register.filter
+def played_at_over(album: Album) -> str:
+    """Calculate if avg played at is over global avg."""
+    global_avg = get_avg_played_at()
+    if not album.avg_played_at or not global_avg:
+        return mark_safe('<i class="bi bi-x"></i> missing date')
+    over = (album.avg_played_at - global_avg).days
+    if over > 0:
+        return mark_safe(f'<i class="bi bi-x"></i> {over} days to go')
+    else:
+        return mark_safe(f'<i class="bi bi-check"></i> by {abs(over)} days')
