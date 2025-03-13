@@ -148,7 +148,7 @@ def update_next_similar_artist():
 BAD_ALBUMS = ['Seether Disclaimer II', 'Nightwish Human. :II: Nature.']
 
 
-def scrape_studio_albums(refresh: bool = False) -> dict:
+def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR0912
     """Scrapes studio album names and their links from a Wikipedia discography page."""
     artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True), 'count_albums').first()
     # update timestamp
@@ -193,24 +193,15 @@ def scrape_studio_albums(refresh: bool = False) -> dict:
             soup = BeautifulSoup(response.content, 'html.parser')
             try:
                 disc_tag = soup.find('h2', id='Discography').parent
-            except AttributeError:
-                raise ValueError(f'Cannot find discography for {artist.name}')
+            except AttributeError as exc:
+                raise ValueError(f'Cannot find discography for {artist.name}') from exc
 
-    subheading_tag = None
-    for wording in ['Studio', 'Main article']:
-        subheading_tmp = disc_tag.next_sibling
-        i = 0
-        while not subheading_tag and subheading_tmp and i < 3:
-            i += 1
-            if subheading_tmp.text and wording in subheading_tmp.text:
-                subheading_tag = subheading_tmp
-            else:
-                subheading_tmp = subheading_tmp.next_sibling
-    if not subheading_tag:
-        subheading_tag = disc_tag
-        # raise ValueError('Expected Studio albums listing')
-
+    subheading_tag = disc_tag.find_next(
+        string=re.compile(r'\b(Main article|Studio)\b', re.IGNORECASE)
+    )
+    subheading_tag = subheading_tag.parent if subheading_tag else disc_tag
     wrapper_tag = subheading_tag.next_sibling.next_sibling
+
     if wrapper_tag.name not in ['table', 'ul']:
         # Find all relevant tags after the current tag
         for tag in wrapper_tag.find_all_next():
@@ -225,11 +216,13 @@ def scrape_studio_albums(refresh: bool = False) -> dict:
     if wrapper_tag.name == 'table':
         for tr in wrapper_tag.find_all('tr'):
             tds = tr.find_all('td', recursive=False)
-            if not tds or len(tds) < 2:
+            length_of_forgot = 2
+            if not tds or len(tds) < length_of_forgot:
                 continue  # th row
             cells = tr.find_all(['td', 'th'], recursive=False)
             # first cell is year
-            if len(cells[0].get_text(separator=' ', strip=True)) == 4:
+            length_of_year = 4
+            if len(cells[0].get_text(separator=' ', strip=True)) == length_of_year:
                 anchor = cells[1].find('a')
                 name = cells[1].get_text(separator=' ', strip=True)
                 name = name.split('Released:')[0].strip()

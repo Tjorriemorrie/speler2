@@ -54,11 +54,12 @@ $(document).ready(function () {
             console.log("Song source set to", songSrc);
 
             // Set the volume based on song rating
-            // Scale rating from [0, 1] to [0.3, 0.7]
+            // Scale rating from [0, 1] to [0.1, 1] exponentially
             let rating = $('#songData').data('rating');
-            const newMax = 0.2;
             const newMin = 0.1;
-            let volume = (((rating - 0) * (newMax - newMin)) / (1 - 0)) + newMin
+            const newMax = 0.4;
+            // Apply an exponential scaling function
+            let volume = newMin + (newMax - newMin) * Math.pow(rating, 2);
             player.volume = volume;
             console.log("Volume set to", volume, "from rating", rating);
 

@@ -282,8 +282,9 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
             song.album.year = metadata['year']
             album_dirty = True
 
-        if song.album.total_tracks != metadata['total_tracks']:
-            song.album.total_tracks = metadata['total_tracks']
+        total_tracks = metadata['total_tracks'] or song.album.songs.count()
+        if song.album.total_tracks != total_tracks:
+            song.album.total_tracks = total_tracks
             album_dirty = True
 
         if song.album.total_discs != metadata['total_discs']:
