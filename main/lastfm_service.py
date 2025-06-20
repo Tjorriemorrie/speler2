@@ -197,7 +197,7 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
                 raise ValueError(f'Cannot find discography for {artist.name}') from exc
 
     subheading_tag = disc_tag.find_next(
-        string=re.compile(r'\b(Main article|Studio)\b', re.IGNORECASE)
+        string=re.compile(r'\b(Main articles?|Studio)\b', re.IGNORECASE)
     )
     subheading_tag = subheading_tag.parent if subheading_tag else disc_tag
     wrapper_tag = subheading_tag.next_sibling.next_sibling
@@ -259,7 +259,7 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
                 }
             )
     else:
-        raise ValueError(f'Unknown tag for wrapper {wrapper_tag.name}')
+        raise ValueError(f'Unknown tag for wrapper {wrapper_tag.name}. Check {artist} manually')
     # album_details['error'] = 'cannot read wiki page'
 
     # strip year prefix from name

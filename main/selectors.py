@@ -161,7 +161,7 @@ def get_songs_by_played_date_chart():
         yaxis_title='Number of Songs',
         autosize=True,
         margin=dict(l=20, r=20, t=30, b=20),
-        xaxis=dict(tickmode='linear', dtick=86400000, tickformat='%d %b'),
+        # xaxis=dict(tickmode='auto', dtick=86400000, tickformat='%d %b'),
     )
 
     # Step 5: Convert the Plotly figure to an HTML string (without full HTML)
