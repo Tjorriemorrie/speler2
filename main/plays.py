@@ -186,7 +186,10 @@ def get_next_song_priority_values() -> Tuple[float, float]:
         earliest_julian_diff = max(earliest_julian_diff, 1.0)
 
     # adjust the earliest day to prevent spam of top hits
-    # 2.0-1.8 does not work when adding album, then it plays hits immediately afterward
+    # the bigger the mul is from 1.0, the bigger the denominator is,
+    #   making the value smaller, meaning the last played song's value is lowered,
+    #   giving it less weight - vs the rating value which will then have more weight
+    # values below 1.0 will increase value of ratio
     adj = 2.0
     adj_earliest_julian_diff = earliest_julian_diff * adj
     diff_adj = round(adj_earliest_julian_diff - earliest_julian_diff)

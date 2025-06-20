@@ -5,7 +5,7 @@ from django import template
 from django.utils import timezone
 from django.utils.safestring import mark_safe
 
-from main.models import Album, Song
+from main.models import Artist, Song
 from main.selectors import get_avg_played_at
 
 register = template.Library()
@@ -127,9 +127,9 @@ def intspace(value):
 
 
 @register.filter
-def one_play_cnt(album: Album) -> str:
-    """Get songs on album with 1 play count."""
-    cnt = album.songs.filter(count_played=1).count()
+def one_play_cnt(artist: Artist) -> str:
+    """Get songs on artist with 1 play count."""
+    cnt = artist.songs.filter(count_played__lte=1).count()
     if cnt:
         return mark_safe(f'<i class="bi bi-x"></i> {cnt} remaining')
     else:
@@ -137,13 +137,13 @@ def one_play_cnt(album: Album) -> str:
 
 
 @register.filter
-def played_at_over(album: Album) -> str:
+def played_at_over(artist: Artist) -> str:
     """Calculate if avg played at is over global avg."""
     global_avg = get_avg_played_at()
-    if not album.avg_played_at or not global_avg:
+    if not artist.avg_played_at or not global_avg:
         return mark_safe('<i class="bi bi-x"></i> missing date')
-    over = (album.avg_played_at - global_avg).days
+    over = (artist.avg_played_at - global_avg).days
     if over > 0:
-        return mark_safe(f'<i class="bi bi-x"></i> {over} days to go')
+        return mark_safe(f'<i class="bi bi-x"></i> req {over} days to go')
     else:
-        return mark_safe(f'<i class="bi bi-check"></i> by {abs(over)} days')
+        return mark_safe(f'<i class="bi bi-check"></i> {abs(over)} days')

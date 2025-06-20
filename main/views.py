@@ -28,7 +28,7 @@ from main.selectors import (
     get_play_count_chart,
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
-    list_lowest_rated_albums,
+    list_lowest_rated_artists,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -407,7 +407,7 @@ def similars_view(request):
 
     last_played_key = 'sim_last_played'
     if refresh == 'lp' or not (last_played := cache.get(last_played_key)):
-        last_played = list_lowest_rated_albums()
+        last_played = list_lowest_rated_artists()
         cache.set(last_played_key, last_played, timeout=3600 * 16)
     ctx['last_played'] = last_played
 

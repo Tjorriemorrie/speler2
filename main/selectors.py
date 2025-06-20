@@ -212,8 +212,13 @@ def get_avg_last_albums():
     return Album.objects.order_by(F('avg_played_at').asc(nulls_last=True))[:10]
 
 
+def list_lowest_rated_artists():
+    """Get artists by lowest rating."""
+    return Artist.objects.exclude(rating__isnull=True).order_by('rating')[:10]
+
+
 def list_lowest_rated_albums():
-    """Get last albums by lowest rating."""
+    """Get albums by lowest rating."""
     return Album.objects.exclude(rating__isnull=True).order_by('rating')[:10]
 
 
