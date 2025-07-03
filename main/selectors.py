@@ -207,17 +207,17 @@ def get_recent_artists() -> QuerySet[History]:
     return recent_histories
 
 
-def get_avg_last_albums():
+def get_avg_last_albums() -> List[Album]:
     """Get last albums by avg played."""
     return Album.objects.order_by(F('avg_played_at').asc(nulls_last=True))[:10]
 
 
-def list_lowest_rated_artists():
+def list_lowest_rated_artists() -> List[Artist]:
     """Get artists by lowest rating."""
     return Artist.objects.exclude(rating__isnull=True).order_by('rating')[:10]
 
 
-def list_lowest_rated_albums():
+def list_lowest_rated_albums() -> List[Album]:
     """Get albums by lowest rating."""
     return Album.objects.exclude(rating__isnull=True).order_by('rating')[:10]
 

@@ -7,7 +7,7 @@ from typing import Tuple, Union
 from django.core.cache import cache
 from django.db import connection
 from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Value
-from django.db.models.expressions import Func, RawSQL
+from django.db.models.expressions import Case, Func, RawSQL, When
 from django.utils import timezone
 from django.utils.timezone import make_aware
 from unidecode import unidecode
@@ -15,7 +15,7 @@ from unidecode import unidecode
 from main.constants import LIST_GENRES
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
-from main.selectors import get_recent_artists
+from main.selectors import get_recent_artists, list_lowest_rated_artists
 
 logger = logging.getLogger(__name__)
 
@@ -45,15 +45,37 @@ def get_next_song() -> Song:
         logger.info(f'Filtering on genres {filter_genres}')
         query = query.filter(**filter_genres)
 
+    # bump the worst artists
+    worst_artist_ids = [a.id for a in list_lowest_rated_artists()]
+
     # Annotate priority
-    songs_with_priority = query.annotate(
-        time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
-        priority=(
-            F('rating')
-            - (F('count_played') / Value(max_played))
-            + (F('time_since_played') / Value(time_till_last_played))
-        ),
-    ).order_by('-priority')
+    songs_with_priority = (
+        query.annotate(
+            time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
+            base_priority=(
+                F('rating')
+                - (F('count_played') / Value(max_played))
+                + (F('time_since_played') / Value(time_till_last_played))
+            ),
+        )
+        .annotate(
+            priority=ExpressionWrapper(
+                F('base_priority')
+                + Case(
+                    When(count_played=1, then=Value(0.1)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(artist_id__in=worst_artist_ids, then=Value(0.1)),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                ),
+                output_field=FloatField(),
+            )
+        )
+        .order_by('-priority')
+    )
 
     # Get the song with the highest priority
     # but exclude recent artist, to prevent single artist spam
@@ -78,7 +100,8 @@ def get_next_song() -> Song:
                 # logger.info(f'Increased existing artist on queue {unidecode(song.artist.name)}')
         elif song.artist.name in queue:
             queue[song.artist.name] += 1
-            # logger.info(f'Has next song, but increasing artist already in queue afterwards: {unidecode(song.artist.name)}')
+            # logger.info(f'Has next song, but increasing artist already
+            # in queue afterwards: {unidecode(song.artist.name)}')
 
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
