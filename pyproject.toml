@@ -80,7 +80,9 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 ]
 "**/models.py" = ["D105"]  # Missing docstring in magic method
 "**/migrations/*" = ["E501"]  # Line too long
-
+"**/fmt.py" = [
+    "S308",  #  Use of `mark_safe` may expose cross-site scripting vulnerabilities
+]
 
 [tool.ruff.lint.pylint]
 max-args = 13

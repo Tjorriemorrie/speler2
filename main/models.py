@@ -37,6 +37,7 @@ class Rank:
 class Artist(Timestamp, Rank):
     name = models.CharField(max_length=150, unique=True)
     slug = models.SlugField(unique=True)
+    is_dirty = models.BooleanField(default=False)
 
     count_albums = models.IntegerField(default=0)
     count_songs = models.IntegerField(default=0)
@@ -68,6 +69,7 @@ class Artist(Timestamp, Rank):
 
 class Album(Timestamp, Rank):
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='albums')
+    is_dirty = models.BooleanField(default=False)
     name = models.CharField(max_length=150)
     slug = models.SlugField(unique=True)
     year = models.IntegerField()
@@ -95,6 +97,7 @@ class Album(Timestamp, Rank):
 class Song(Timestamp, Rank):
     album = models.ForeignKey(Album, on_delete=models.CASCADE, related_name='songs')
     artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='songs')
+    is_dirty = models.BooleanField(default=False)
     rel_path = models.CharField(max_length=255, unique=True)
     slug = models.SlugField(unique=True)
     name = models.CharField(max_length=150)

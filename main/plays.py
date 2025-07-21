@@ -49,6 +49,7 @@ def get_next_song() -> Song:
     worst_artist_ids = [a.id for a in list_lowest_rated_artists()]
 
     # Annotate priority
+    weight = 0.1
     songs_with_priority = (
         query.annotate(
             time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
@@ -62,12 +63,12 @@ def get_next_song() -> Song:
             priority=ExpressionWrapper(
                 F('base_priority')
                 + Case(
-                    When(count_played=1, then=Value(0.1)),
+                    When(count_played=1, then=Value(weight)),
                     default=Value(0.0),
                     output_field=FloatField(),
                 )
                 + Case(
-                    When(artist_id__in=worst_artist_ids, then=Value(0.1)),
+                    When(artist_id__in=worst_artist_ids, then=Value(weight)),
                     default=Value(0.0),
                     output_field=FloatField(),
                 ),
@@ -85,8 +86,8 @@ def get_next_song() -> Song:
         queue[history_artist.song.artist.name] = 0
 
     # Query once and store in memory (for rnd)
-    limit = 100
-    songs = list(songs_with_priority.all()[:50])
+    limit = 200
+    songs = list(songs_with_priority.all()[:limit])
     next_song = None
     # Iterate over the songs and check if the artist was recently played
     for song in songs:

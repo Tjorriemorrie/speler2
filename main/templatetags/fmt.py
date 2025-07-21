@@ -107,7 +107,8 @@ def days_ago(value):
     month = value.strftime('%b')  # Get the abbreviated month
     date_str = f'{day} {month}'  # Combine day and month
 
-    if delta.days <= 90:
+    three_months = 90
+    if delta.days <= three_months:
         dur_repr = delta.days
         dur_per = 'days'
     else:
@@ -146,4 +147,4 @@ def played_at_over(artist: Artist) -> str:
     if over > 0:
         return mark_safe(f'<i class="bi bi-x"></i> req {over} days to go')
     else:
-        return mark_safe(f'<i class="bi bi-check"></i> {abs(over)} days')
+        return mark_safe('<i class="bi bi-check"></i>')
