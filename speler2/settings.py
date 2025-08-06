@@ -9,6 +9,7 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/5.1/ref/settings/
 """
 
+import io
 import sys
 from pathlib import Path
 
@@ -151,22 +152,29 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 APPEND_SLASH = True
 
 # logging
+LOG_DIR = BASE_DIR / 'logs'
+LOG_DIR.mkdir(exist_ok=True)
+if sys.stdout.encoding != 'utf-8':
+    sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+    sys.stderr = io.TextIOWrapper(sys.stderr.buffer, encoding='utf-8')
 LOGGING = {
     'version': 1,
     'disable_existing_loggers': False,
     'formatters': {
         'standard': {
-            'format': '%(asctime)s %(levelname)-8s %(message)s {%(filename)s:%(lineno)d}',
+            '()': 'colorlog.ColoredFormatter',
+            'format': '%(log_color)s%(asctime)s %(levelname)-8s %(message)s {%(filename)s:%(lineno)d}',  # noqa: E501
         },
         'compact': {
-            'format': '%(levelname)-7s %(message)s',
+            '()': 'colorlog.ColoredFormatter',
+            'format': '%(log_color)s%(asctime)s %(levelname)-8s %(message)s',
         },
     },
     'handlers': {
         'file': {
-            'level': env('LOG_LEVEL'),
+            'level': 'DEBUG',
             'class': 'logging.handlers.TimedRotatingFileHandler',
-            'filename': BASE_DIR / '.logs' / 'wsgi.log',
+            'filename': str(LOG_DIR / 'app.log'),
             'when': 'midnight',
             'backupCount': 30,
             'delay': True,
@@ -175,22 +183,24 @@ LOGGING = {
         'console': {
             'level': 'INFO',
             'class': 'logging.StreamHandler',
-            'formatter': 'compact',
             'stream': sys.stdout,
+            'formatter': 'compact',
         },
     },
     'root': {
         'handlers': ['file', 'console'],
-        'level': env('LOG_LEVEL'),
+        'level': 'DEBUG',
         'propagate': False,
     },
     'loggers': {
         'django': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
             'propagate': False,
         },
-        'pylast': {
-            'handlers': ['console'],
-            'level': 'CRITICAL',  # Only log CRITICAL messages
+        'django.server': {
+            'handlers': ['file'],
+            'level': 'DEBUG',
             'propagate': False,
         },
     },

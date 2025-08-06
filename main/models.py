@@ -62,6 +62,8 @@ class Artist(Timestamp, Rank):
         """Get wiki discography search link."""
         if self.slug == 'blink-182':
             return 'https://en.wikipedia.org/wiki/Blink-182'
+        if self.slug == 'the-all-american-rejects':
+            return 'https://en.wikipedia.org/wiki/The_All-American_Rejects'
         params = {'search': f'{self.name.replace("-", "_")} discography'}
         url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
         return url
@@ -122,7 +124,7 @@ class Song(Timestamp, Rank):
 
     def __str__(self):
         """Get str."""
-        txt = f'<Song-{self.id} {self.name} {self.artist.name}>'
+        txt = f'<Song-{self.id} {self.name} ~{self.artist.name}>'
         return unidecode(txt)
 
     def file_path(self) -> Path:
