@@ -22,16 +22,12 @@ logger = logging.getLogger(__name__)
 
 def get_next_song() -> Song:
     """Get next song to play."""
-    # First play unrated songs
-    if (unrated_songs := Song.objects.filter(count_played=0)).exists():
-        song = random.choice(unrated_songs)  # noqa: S311
-        logger.info(f'Returning unplayed random song: {song}')
-        return song
-
     max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
-    time_since_played_expr = RawSQL("(julianday('now') - julianday(main_song.played_at))", [])
+    time_since_played_expr = RawSQL(
+        "(julianday('now') - julianday(COALESCE(main_song.played_at, '2024-10-01')))", []
+    )
 
     query = Song.objects
 
