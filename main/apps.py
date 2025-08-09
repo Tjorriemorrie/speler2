@@ -7,3 +7,5 @@ class MainConfig(AppConfig):
 
     def ready(self):
         """Add signals."""
+        # fmt off
+        # fmt on
