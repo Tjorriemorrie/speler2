@@ -26,7 +26,7 @@ def get_next_song() -> Song:
 
     # Calculate time since played using raw SQL
     time_since_played_expr = RawSQL(
-        "(julianday('now') - julianday(COALESCE(main_song.played_at, '2024-10-01')))", []
+        "(julianday('now') - julianday(COALESCE(main_song.played_at, '1982-08-04')))", []
     )
 
     query = Song.objects
@@ -82,7 +82,7 @@ def get_next_song() -> Song:
         queue[history_artist.song.artist.name] = 0
 
     # Query once and store in memory (for rnd)
-    limit = 200
+    limit = 100
     songs = list(songs_with_priority.all()[:limit])
     next_song = None
     # Iterate over the songs and check if the artist was recently played

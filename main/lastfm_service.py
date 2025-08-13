@@ -173,14 +173,6 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
     response.raise_for_status()
     soup = BeautifulSoup(response.content, 'html.parser')
 
-    # if 'does not exist.' in soup.text:
-    #     url += ' (band)'
-    #     response = requests.get(url, timeout=10)
-    #     response.raise_for_status()
-    #     soup = BeautifulSoup(response.content, 'html.parser')
-    #     if 'does not exist.' in soup.text:
-    #         raise ValueError('Unknown page')
-
     try:
         disc_tag = soup.find('h2', id='Discography').parent
     except AttributeError:
@@ -200,18 +192,18 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
         string=re.compile(r'\b(Main articles?|Studio)\b', re.IGNORECASE)
     )
     subheading_tag = subheading_tag.parent if subheading_tag else disc_tag
-    wrapper_tag = subheading_tag.next_sibling.next_sibling
 
-    if wrapper_tag.name not in ['table', 'ul']:
-        # Find all relevant tags after the current tag
-        for tag in wrapper_tag.find_all_next():
-            # Stop if we encounter the next <h2>
-            if tag.name == 'h2':
-                break
-            # Return the first <table> or <ul>
-            if tag.name in ['table', 'ul']:
-                wrapper_tag = tag
-                break
+    # Find the first table or ul after the subheading, stopping at next h2
+    wrapper_tag = None
+    for tag in subheading_tag.find_all_next():
+        if tag.name in ['table', 'ul']:
+            wrapper_tag = tag
+            break
+        if tag.name == 'h2':
+            break
+
+    if not wrapper_tag:
+        raise ValueError(f'Could not find album list table/ul for {artist.name}')
 
     if wrapper_tag.name == 'table':
         for tr in wrapper_tag.find_all('tr'):
@@ -260,47 +252,11 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
             )
     else:
         raise ValueError(f'Unknown tag for wrapper {wrapper_tag.name}. Check {artist} manually')
-    # album_details['error'] = 'cannot read wiki page'
 
     # strip year prefix from name
     for album_info in wiki_details['albums']:
         if album_info['name'].startswith(album_info['year']):
             album_info['name'] = album_info['name'][5:]
-
-    # response = requests.get(artist.wiki_link, timeout=10)
-    # response.raise_for_status()
-    # soup = BeautifulSoup(response.content, 'html.parser')
-    # album_tables = soup.find_all('table', {'class': 'wikitable'})
-    #
-    # if not album_tables:
-    #
-    # else:
-    #     for row in album_tables[0].find_all('tr')[2:]:
-    #         th_cell = row.find('th')
-    #         if not th_cell:
-    #             logger.info(f'No th header for: {row.text}')
-    #             continue  # "—" denotes a release that did not chart or was not issued in that
-    #         album_title = th_cell.get_text()
-    #         if th_anchor := th_cell.find('a'):
-    #             album_link = f"https://en.wikipedia.org{th_anchor['href']}"
-    #         else:
-    #             album_link = None
-    #
-    #         album_slug = f'{artist.slug}-{slugify(unidecode(album_title))}'
-    #         try:
-    #             artist.albums.get(slug=album_slug)
-    #             logger.info(f'Studio album exists: {album_title}')
-    #         except Album.DoesNotExist:
-    #             logger.info(f'Missing album found: {album_title}')
-    #             if f'{artist.name} {album_title}' in BAD_ALBUMS:
-    #                 logger.info(f'Ignoring album {album_title}')
-    #                 continue
-    #             wiki_details['title'] = album_title
-    #             wiki_details['link'] = album_link
-    #             break
-    #     else:
-    #         wiki_details['error'] = 'No missing studio albums found'
-    #         logger.info(f'No missing studio albums found for {artist}')
 
     logger.info(f'Successfully scraped {len(wiki_details["albums"])} albums for {artist}')
 
