@@ -55,7 +55,6 @@ It also checks wikipedia for artist info if you have missed an album (beta).
 
 ## How to use
 
-
 Just clone the repo and do normal django setup steps. You can use uv to set it up quickly:
 
 ```bash
@@ -66,6 +65,13 @@ Copy your .env from .env.dist and set your values, e.g.
 ```ini
 MUSIC_DIR=C:\Users\jacoj\Dropbox\Jaco\Music
 ```
+
+Then just run it to scan for music file changes:
+```bash
+python manage.py parsemusic
+```
+
+Then run the server:
 
 Extra: in my .PROFILE/.bachrc I have an alias to run the server quickly:
 
