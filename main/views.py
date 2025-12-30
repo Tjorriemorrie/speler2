@@ -28,7 +28,7 @@ from main.selectors import (
     get_play_count_chart,
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
-    list_lowest_rated_artists,
+    list_lowest_rated_albums,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -41,7 +41,7 @@ def home_view(request: WSGIRequest):
     return render(request, 'main/home.html', ctx)
 
 
-def next_song_view(request: WSGIRequest):  # noqa: PLR0912
+def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     """Return next song."""
     last_song_id = request.session.get('song_id')
     song_timestamp = request.session.get('song_timestamp')
@@ -382,6 +382,11 @@ def genre_view(request, facet: str, facet_id: int, genre: str):
 
 def similars_view(request):
     """Get artist to review and new bands from LastFM."""
+    return render(request, 'main/partial_similars.html')
+
+
+def similars_missing_albums_view(request):
+    """List missing albums from last updated artist."""
     ctx = {}
     refresh = request.GET.get('refresh')
 
@@ -396,6 +401,15 @@ def similars_view(request):
             wiki_details = {'error': str(exc)}
     ctx['wiki_details'] = wiki_details
 
+    response = render(request, 'main/snippet_similars_missing_albums.html', ctx)
+    return response
+
+
+def similars_recommended_view(request):
+    """List new similar artists."""
+    ctx = {}
+    refresh = request.GET.get('refresh')
+
     grouped_similar_key = 'sim_grouped_similar'
     if refresh == 'gs' or not (grouped_similars := cache.get(grouped_similar_key)):
         try:
@@ -405,11 +419,20 @@ def similars_view(request):
         cache.set(grouped_similar_key, grouped_similars, timeout=3600 * 16)
     ctx['grouped_similars'] = grouped_similars
 
+    response = render(request, 'main/snippet_similars_new_artists.html', ctx)
+    return response
+
+
+def similars_bad_albums(request):
+    """List bad artists for removal."""
+    ctx = {}
+    refresh = request.GET.get('refresh')
+
     last_played_key = 'sim_last_played'
     if refresh == 'lp' or not (last_played := cache.get(last_played_key)):
-        last_played = list_lowest_rated_artists()
+        last_played = list_lowest_rated_albums()
         cache.set(last_played_key, last_played, timeout=3600 * 16)
     ctx['last_played'] = last_played
 
-    response = render(request, 'main/partial_similars.html', ctx)
+    response = render(request, 'main/snippet_similars_bad_albums.html', ctx)
     return response

@@ -1,7 +1,11 @@
 import datetime
 import logging
 import re
+import string
+import unicodedata
+from typing import List
 
+import bs4
 import pylast
 import requests
 from bs4 import BeautifulSoup
@@ -54,30 +58,29 @@ def update_next_similar_artist():
     # scrape artists that does not yet have similars
     sim_artist_ids = Similar.objects.values('artist_id')
     next_artist = Artist.objects.exclude(id__in=sim_artist_ids).order_by('-rating').first()
+    if not next_artist:
+        next_artist = Artist.objects.order_by('-rating').first()
 
     # clear existing rows
     cnt = Similar.objects.filter(artist=next_artist).delete()
 
-    if next_artist:
-        logger.info(f'Getting similar artists for {next_artist}')
-        network = get_network()
-        lastfm_artist = network.get_artist(next_artist.name)
-        similar_artists = lastfm_artist.get_similar(limit=100)
-        for similar_artist, match in similar_artists:
-            sim_artist_name = similar_artist.get_name()
-            sim_artist_slug = slugify(unidecode(sim_artist_name))
-            score = next_artist.rating * match
-            Similar.objects.create(
-                artist=next_artist,
-                artist_name=sim_artist_name,
-                artist_slug=sim_artist_slug,
-                match=match,
-                rating=next_artist.rating,
-                score=score,
-                scraped_at=timezone.now(),
-            )
-    else:
-        raise NotImplementedError('need to rehandle similar artists already done')
+    logger.info(f'Getting similar artists for {next_artist}')
+    network = get_network()
+    lastfm_artist = network.get_artist(next_artist.name)
+    similar_artists = lastfm_artist.get_similar(limit=100)
+    for similar_artist, match in similar_artists:
+        sim_artist_name = similar_artist.get_name()
+        sim_artist_slug = slugify(unidecode(sim_artist_name))
+        score = next_artist.rating * match
+        Similar.objects.create(
+            artist=next_artist,
+            artist_name=sim_artist_name,
+            artist_slug=sim_artist_slug,
+            match=match,
+            rating=next_artist.rating,
+            score=score,
+            scraped_at=timezone.now(),
+        )
 
     excluded_slugs = Artist.objects.values_list('slug', flat=True)
     grouped_artists = (
@@ -151,7 +154,6 @@ BAD_ALBUMS = ['Seether Disclaimer II', 'Nightwish Human. :II: Nature.']
 def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR0912
     """Scrapes studio album names and their links from a Wikipedia discography page."""
     artist = Artist.objects.order_by(F('disco_at').asc(nulls_first=True), 'count_albums').first()
-    # update timestamp
     if refresh:
         logger.info(f'Marked {artist.name} discography as scraped.')
         artist.disco_at = timezone.now() + datetime.timedelta(days=30 * artist.count_albums)
@@ -160,109 +162,265 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
             F('disco_at').asc(nulls_first=True), 'count_albums'
         ).first()
 
-    wiki_details = {
-        'artist': artist,
-        'albums': [],
-    }
+    wiki_details = {'artist': artist, 'albums': []}
     logger.info(f'Fetching {artist.name} studio albums from {artist.wiki_link}')
 
-    # try getting discography from band page
+    headers = {
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+        '(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+    }
     url = artist.wiki_link
-    url = url.replace('discography', '').strip()
-    response = requests.get(url, timeout=20)
-    response.raise_for_status()
-    soup = BeautifulSoup(response.content, 'html.parser')
+    for suffix in ['', ' (band)', ' (musician)']:
+        url_used = url + suffix
+        response = requests.get(url_used, headers=headers, timeout=10)
+        response.raise_for_status()
+        soup = BeautifulSoup(response.content, 'html.parser')
 
-    try:
-        disc_tag = soup.find('h2', id='Discography').parent
-    except AttributeError:
-        try:
-            disc_tag = soup.find('h2', id='Solo_discography').parent
-        except AttributeError:
-            url += '(band)'
-            response = requests.get(url, timeout=20)
-            response.raise_for_status()
-            soup = BeautifulSoup(response.content, 'html.parser')
-            try:
-                disc_tag = soup.find('h2', id='Discography').parent
-            except AttributeError as exc:
-                raise ValueError(f'Cannot find discography for {artist.name}') from exc
+        id_heading = 'Discography'
+        if artist.name == 'Prime Circle':
+            id_heading = 'Discography_2'
 
-    subheading_tag = disc_tag.find_next(
-        string=re.compile(r'\b(Main articles?|Studio)\b', re.IGNORECASE)
-    )
-    subheading_tag = subheading_tag.parent if subheading_tag else disc_tag
-
-    # Find the first table or ul after the subheading, stopping at next h2
-    wrapper_tag = None
-    for tag in subheading_tag.find_all_next():
-        if tag.name in ['table', 'ul']:
-            wrapper_tag = tag
+        disc_heading = find_discography_heading(soup, id_heading)
+        if disc_heading:
             break
-        if tag.name == 'h2':
-            break
-
-    if not wrapper_tag:
-        raise ValueError(f'Could not find album list table/ul for {artist.name}')
-
-    if wrapper_tag.name == 'table':
-        for tr in wrapper_tag.find_all('tr'):
-            tds = tr.find_all('td', recursive=False)
-            length_of_forgot = 2
-            if not tds or len(tds) < length_of_forgot:
-                continue  # th row
-            cells = tr.find_all(['td', 'th'], recursive=False)
-            # first cell is year
-            length_of_year = 4
-            if len(cells[0].get_text(separator=' ', strip=True)) == length_of_year:
-                anchor = cells[1].find('a')
-                name = cells[1].get_text(separator=' ', strip=True)
-                name = name.split('Released:')[0].strip()
-                year = cells[0].get_text(strip=True)
-            # else first name then year
-            else:
-                anchor = cells[0].find('a')
-                name = cells[0].get_text(separator='\n', strip=True).split('\n')[0]
-                try:
-                    year_txt = cells[1].get_text(separator=' ', strip=True)
-                    year = re.search(r'\b\d{4}\b', year_txt).group()
-                except AttributeError:  # trust company has release in first cell below name
-                    year_txt = cells[0].get_text(separator='\n', strip=True).split('\n')[1]
-                    year = re.search(r'\b\d{4}\b', year_txt).group()
-
-            wiki_details['albums'].append(
-                {
-                    'year': year,
-                    'name': name,
-                    'href': ('https://en.wikipedia.org' + anchor['href']) if anchor else None,
-                }
-            )
-    elif wrapper_tag.name == 'ul':
-        for li in wrapper_tag.find_all('li', recursive=False):
-            name_txt = li.get_text(separator=' ', strip=True)
-            name = name_txt.split('(')[0]
-            year = re.search(r'(\d{4})', li.text).group(1)
-            anchor = li.find('a')
-            wiki_details['albums'].append(
-                {
-                    'year': year,
-                    'name': name.strip(),
-                    'href': ('https://en.wikipedia.org' + anchor['href']) if anchor else None,
-                }
-            )
     else:
-        raise ValueError(f'Unknown tag for wrapper {wrapper_tag.name}. Check {artist} manually')
+        raise ValueError(f'Could not find artist home wiki page: {url}')
 
-    # strip year prefix from name
+    hatnote_tag = find_hatnote_tag(disc_heading)
+
+    albums_tag = find_albums_tag(hatnote_tag)
+
+    if albums_tag.name == 'ul':
+        wiki_details['albums'] = extract_albums_from_ul(albums_tag)
+    elif albums_tag.name == 'table':
+        wiki_details['albums'] = extract_albums_from_table(albums_tag)
+
+    # Strip year prefix from name if present
     for album_info in wiki_details['albums']:
         if album_info['name'].startswith(album_info['year']):
             album_info['name'] = album_info['name'][5:]
 
     logger.info(f'Successfully scraped {len(wiki_details["albums"])} albums for {artist}')
 
-    # match albums
-    album_names = {a.name for a in artist.albums.all()}
+    # Mark which albums the artist already owns
+    album_names = {clean_name(a.name) for a in artist.albums.all()}
     for album_info in wiki_details['albums']:
-        album_info['own'] = album_info['name'] in album_names
+        name_clean = clean_name(album_info['name'])
+        album_info['own'] = name_clean in album_names
 
     return wiki_details
+
+
+def find_discography_heading(soup: bs4.BeautifulSoup, id_heading: str) -> bs4.element.Tag:
+    """Find discography tag."""
+    # disc_heading = soup.find(id=re.compile(r'(Discography|Solo_discography)', re.I))
+    # if not disc_heading:
+    #     raise ValueError(f"Cannot find discography for {artist.name}")
+
+    disc_heading = soup.find(id=id_heading)
+    """
+    <div class="mw-heading mw-heading2">
+        <h2 id="Discography">Discography</h2>
+        <span class="mw-editsection">
+            <span class="mw-editsection-bracket">[</span>
+            <a href="/w/index.php?title=Jack_Johnson_(musician)&amp;action=edit&amp;section=11">
+                <span>edit</span>
+            </a>
+            <span class="mw-editsection-bracket">]</span>
+        </span>
+    </div>
+    """
+    # move back up to parent if it is a holder
+    if disc_heading:
+        parent_div = disc_heading.find_parent('div', class_='mw-heading mw-heading2')
+        if parent_div:
+            return parent_div
+    return disc_heading
+
+
+def find_hatnote_tag(disc_tag: bs4.element.Tag) -> bs4.element.Tag:
+    """Check for studio albums heading or otherwise find link."""
+    hatnote = disc_tag.find_next(lambda tag: tag.name and 'Main article' in tag.get_text())
+
+    if not hatnote:
+        logger.warning('No hatnote found')
+        return disc_tag
+
+    return hatnote
+
+
+def find_albums_tag(studio_tag: bs4.element.Tag) -> bs4.element.Tag:
+    """Find the tag that contains the album list."""
+    for next_tag in studio_tag.find_all_next():
+        tag_name = next_tag.name
+
+        # direct hit
+        if tag_name in ('ul', 'table'):
+            # infobox special-case: skip to the next table
+            if tag_name == 'table' and 'infobox' in next_tag.get('class', []):
+                next_real = next_tag.find_next('table')
+                if next_real:
+                    logger.info('Found discography table after infobox')
+                    return next_real
+                raise ValueError('Infobox found, but no discography table after it')
+
+            logger.info(f'Found album list as {tag_name} tag')
+            return next_tag
+
+        # wrapped in <p> or <div>
+        if tag_name in ('p', 'div'):
+            inner = next_tag.find(['ul', 'table'])
+            if inner:
+                # same infobox check for wrapped tables
+                if inner.name == 'table' and 'infobox' in inner.get('class', []):
+                    next_real = inner.find_next('table')
+                    if next_real:
+                        logger.info('Found discography table after infobox (wrapped)')
+                        return next_real
+                    raise ValueError('Infobox found, but no discography table after it')
+
+                logger.info(f'Found album list nested in {tag_name}')
+                return inner
+
+    raise ValueError('Could not find album list')
+
+
+def extract_albums_from_ul(albums_tag: bs4.element.Tag) -> List[dict]:
+    """Extract album details, excluding unreleased albums (e.g., TBD)."""
+    albums = []
+    for li in albums_tag.find_all('li', recursive=False):
+        anchor = li.find('a')
+        text = li.get_text(strip=True)
+
+        # Try to find a 4-digit year
+        year_match = re.search(r'\b\d{4}\b', text)
+        if not year_match:
+            # Skip entries without a concrete year (TBD / upcoming)
+            continue
+
+        name = anchor.get_text(strip=True) if anchor else text
+        year = year_match.group()
+
+        album_info = {
+            'name': name,
+            'year': year,
+            'href': ('https://en.wikipedia.org' + anchor['href']) if anchor else None,
+        }
+        logger.info(f'Extracted album {album_info}')
+        albums.append(album_info)
+
+    return albums
+
+
+def extract_albums_from_table(albums_tag: bs4.element.Tag) -> list[dict[str, str]]:
+    """Extract album details from a table, handling multiple formats."""
+    albums = []
+
+    for tr in albums_tag.find_all('tr'):
+        # Try the first format (album name in <th scope="row">)
+        header_cell = tr.find('th', scope='row')
+
+        if header_cell:
+            # Album name is directly in the <th>
+            name = header_cell.get_text(' ', strip=True)
+            anchor = header_cell.find('a')
+            href = (
+                'https://en.wikipedia.org' + anchor['href']
+                if anchor and anchor.get('href')
+                else None
+            )
+
+            # Try to extract year from album details cell
+            year = None
+            cells = tr.find_all('td', recursive=False)
+            if cells:
+                album_details = cells[0]
+
+                # Case 1: look for explicit "Release date:"
+                li_date = album_details.find('li', string=lambda s: s and 'Release date:' in s)
+                if li_date:
+                    match = re.search(r'\b(\d{4})\b', li_date.get_text())
+                    if match:
+                        year = match.group(1)
+
+                # Case 2: fallback — just search any 4-digit year in the cell text
+                if year is None:
+                    match = re.search(r'\b(\d{4})\b', album_details.get_text(' ', strip=True))
+                    if match:
+                        year = match.group(1)
+
+        else:
+            # Fallback: second format (year in first <td>, album in second <td>)
+            cells = tr.find_all('td', recursive=False)
+            cells_req = 2
+            if len(cells) < cells_req:
+                continue  # skip header or non-album rows
+
+            # First <td> is the year
+            year_text = cells[0].get_text(strip=True)
+            match = re.search(r'\b(\d{4})\b', year_text)
+            year = match.group(1) if match else None
+
+            # Second <td> → only take the first <i> (the album title)
+            album_cell = cells[1]
+            i_tag = album_cell.find('i')
+            if i_tag:
+                name = i_tag.get_text(' ', strip=True)
+                anchor = i_tag.find('a')
+                href = (
+                    'https://en.wikipedia.org' + anchor['href']
+                    if anchor and anchor.get('href')
+                    else None
+                )
+            else:
+                # Fallback: just take text from cell
+                name = album_cell.get_text(' ', strip=True)
+                anchor = album_cell.find('a')
+                href = (
+                    'https://en.wikipedia.org' + anchor['href']
+                    if anchor and anchor.get('href')
+                    else None
+                )
+
+        albums.append(
+            {
+                'name': name,
+                'year': year,
+                'href': href,
+            }
+        )
+
+    return albums
+
+
+def clean_name(text: str) -> str:
+    """Return album name with bracketed text stripped, normalized, and punctuation removed."""
+    # 1. Drop every substring that starts with '(' and ends with ')'
+    text = re.sub(r'\s*\([^)]*\)', '', text)
+
+    # 2. Collapse any double spaces that might be left behind
+    text = re.sub(r'\s{2,}', ' ', text)
+
+    # 3. Normalize unicode (convert curly quotes, accented letters, etc.)
+    text = unicodedata.normalize('NFKC', text)
+
+    # 4. Replace common “smart punctuation” with ASCII equivalents
+    substitutions = {
+        '’': "'",
+        '‘': "'",
+        '“': '"',
+        '”': '"',
+        '–': '-',
+        '—': '-',
+        '…': '...',
+    }
+    for bad, good in substitutions.items():
+        text = text.replace(bad, good)
+
+    # 5. Strip punctuation
+    text = text.translate(str.maketrans('', '', string.punctuation))
+
+    # 6. Trim & casefold
+    text = text.strip().casefold()
+
+    return text

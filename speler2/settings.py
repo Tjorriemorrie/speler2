@@ -33,15 +33,16 @@ DEBUG = env.bool('DEBUG')
 DEVELOPER = env.bool('DEVELOPER', False)
 
 ALLOWED_HOSTS = [
-    '127.0.0.1',
-    'localhost',
-    '10.26.18.138',
-    '192.168.1.100',
-    '192.168.1.101',
-    '192.168.1.102',
-    '192.168.1.103',
-    '192.168.1.104',
-    '192.168.1.105',
+    '*',
+    # '127.0.0.1',
+    # 'localhost',
+    # '10.26.18.138',
+    # '192.168.1.100',
+    # '192.168.1.101',
+    # '192.168.1.102',
+    # '192.168.1.103',
+    # '192.168.1.104',
+    # '192.168.1.105',
 ]
 
 
@@ -219,6 +220,7 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 
 
 MUSIC_DIR = Path(env('MUSIC_DIR'))
+EXTERNAL_DIR = BASE_DIR / '_external'
 USE_MP3 = env.bool('USE_MP3')
 ALBUMS_DIR = BASE_DIR / '.albums'
 LYRICS_DIR = BASE_DIR / '.lyrics'
@@ -236,3 +238,5 @@ LASTFM_ENABLE = bool(LASTFM_API_KEY and LASTFM_SECRET)
 LASTFM_SESSION_FILE = BASE_DIR / 'lastfm.session'
 
 HUGGING_FACE_API = env.str('HUGGING_FACE_API')
+
+SOUNDS_DIR = BASE_DIR / 'main' / 'static' / 'main' / 'sounds'

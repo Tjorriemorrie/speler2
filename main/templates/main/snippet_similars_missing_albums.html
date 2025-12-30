@@ -1,0 +1,42 @@
+{% load fmt %}
+
+<h4 class="d-flex align-items-center gap-2">
+    Albums listing of artist
+
+    <button class="btn btn-sm btn-outline-primary border-0 p-1"
+            title="Refresh"
+            hx-get="{% url 'similars_missing_albums' %}?refresh=ad"
+            hx-trigger="click"
+            hx-target="#similars_missing_albums"
+            hx-swap="innerHTML"
+            hx-indicator="this">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+</h4>
+
+{% if wiki_details.artist %}
+    <h5 class="my-3">
+        <a class="no-blue" href="{{ wiki_details.artist.wiki_link }}" target="_blank">
+            <i class="bi bi-wikipedia"></i>
+        </a>
+        <a class="no-blue artist-font" href="#"
+           hx-get="{% url 'artist' wiki_details.artist.id %}"
+           hx-target="#main-container"
+           hx-swap="innerHTML">
+            {{ wiki_details.artist.name }}
+        </a>
+    </h5>
+{% endif %}
+
+{% if wiki_details.error %}
+    <div class="alert alert-danger">{{ wiki_details.error }}</div>
+{% endif %}
+
+{% for album_info in wiki_details.albums %}
+    <p>
+        {% if album_info.own %}<i class="bi bi-check"></i>{% else %}
+            <i class="bi bi-x"></i>{% endif %}
+        {{ album_info.year }} - {{ album_info.name }}
+        {% if album_info.href %}<a href="{{ album_info.href }}" target="_blank">Link</a>{% endif %}
+    </p>
+{% endfor %}

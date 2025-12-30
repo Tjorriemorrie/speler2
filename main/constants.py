@@ -1,4 +1,4 @@
-RATINGS_WINDOW = 60 * 40  # minutes
+RATINGS_WINDOW = 60 * 60  # minutes
 
 GENRE_CHRISTIAN = 'christian'
 GENRE_POP_DANCE = 'pop and dance'

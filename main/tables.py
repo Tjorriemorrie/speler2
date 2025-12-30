@@ -226,6 +226,13 @@ class AlbumTable(tables.Table):
         initial_sort_descending=True,
         verbose_name='Plays',
     )
+    year = Column(
+        verbose_name='Year',
+        attrs={
+            'th': {'class': 'd-none d-lg-table-cell'},
+            'td': {'class': 'd-none d-lg-table-cell'},
+        },
+    )
     played_at = Column(
         initial_sort_descending=True,
         verbose_name='Last Played',
@@ -252,6 +259,7 @@ class AlbumTable(tables.Table):
             'count_songs',
             'total_length',
             'count_played',
+            'year',
             'played_at',
             'genre',
         )

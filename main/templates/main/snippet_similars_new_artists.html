@@ -1,0 +1,45 @@
+{% load fmt %}
+
+<!-- Similar artists from lastfm -->
+<h3 class="d-flex align-items-center gap-2">
+    New artists
+
+    <button class="btn btn-sm btn-outline-primary border-0 p-1"
+            title="Refresh"
+            hx-get="{% url 'similars_new_artists' %}?refresh=gs"
+            hx-trigger="click"
+            hx-target="#similars_new_artists"
+            hx-swap="innerHTML"
+            hx-indicator="this">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+</h3>
+
+{% if not grouped_similars %}
+    <p>No artists data found.</p>
+{% else %}
+    <table class="table table-sm table-striped table-hover mt-1">
+        <thead>
+        <tr>
+            <th></th>
+            <th>Artist</th>
+            <th>Total Score</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for sim_artist in grouped_similars %}
+            <tr>
+                <td>
+                    <a class="no-blue"
+                       href="https://www.wikipedia.org/w/index.php?search={{ sim_artist.artist_name }} Discography"
+                       target="_blank">
+                        <i class="bi bi-wikipedia"></i>
+                    </a>
+                </td>
+                <td>{{ sim_artist.artist_name }}</td>
+                <td>{{ sim_artist.total_score|perc }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endif %}

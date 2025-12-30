@@ -8,147 +8,28 @@
 
         <div class="row">
 
-            <!-- Missing albums on existing -->
-            <div class="col-3">
-                <h3>
-                    Album details
-                    <span class="no-blue" href="#" title="Refresh"
-                          hx-get="{% url 'similars' %}?refresh=ad"
-                          hx-trigger="click"
-                          hx-target="#main-container"
-                          hx-swap="innerHTML">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </span>
+            <!-- HTMX will fill these three columns -->
 
-                </h3>
-                {% if wiki_details.artist %}
-                    <h5 class="my-3">
-                        <a class="no-blue" href="{{ wiki_details.artist.wiki_link }}"
-                           target="_blank">
-                            <i class="bi bi-wikipedia"></i>
-                        </a>
-                        <a class="no-blue artist-font" href="#"
-                           hx-get="{% url 'artist' wiki_details.artist.id %}"
-                           hx-trigger="click"
-                           hx-target="#main-container"
-                           hx-swap="innerHTML">
-                            {{ wiki_details.artist.name }}
-                        </a>
-                    </h5>
-                {% endif %}
-                {% if wiki_details.error %}
-                    <div class="alert alert-danger">
-                        {{ wiki_details.error }}
-                    </div>
-                {% endif %}
-                {% for album_info in wiki_details.albums %}
-                    <p>
-                        {% if album_info.own %}
-                            <i class="bi bi-check"></i>
-                        {% else %}
-                            <i class="bi bi-x"></i>
-                        {% endif %}
-                        {{ album_info.year }} - {{ album_info.name }}
-                        {% if album_info.href %}
-                            <a href="{{ album_info.href }}" target="_blank">Link</a>{% endif %}
-                    </p>
-                {% endfor %}
+            <div class="col-3" id="similars_missing_albums"
+                 hx-get="{% url 'similars_missing_albums' %}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="spinner-border spinner-border-sm"></div>
             </div>
 
-
-            <!-- Similar artists from lastfm -->
-            <div class="col-4">
-                <h3>
-                    New, similar artists to artists already in the library.
-                    <span class="no-blue" href="#" title="Refresh"
-                          hx-get="{% url 'similars' %}?refresh=gs"
-                          hx-trigger="click"
-                          hx-target="#main-container"
-                          hx-swap="innerHTML">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </span>
-                </h3>
-                {% if not grouped_similars %}
-                    <p>No artists data found.</p>
-                {% else %}
-                    <table class="table table-sm table-striped table-hover mt-1">
-                        <thead>
-                        <tr>
-                            <th></th>
-                            <th>Artist</th>
-                            <th>Total Score</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for sim_artist in grouped_similars %}
-                            <tr>
-                                <td>
-                                    <a class="no-blue"
-                                       href="https://www.wikipedia.org/w/index.php?search={{ sim_artist.artist_name }} Discography"
-                                       target="_blank">
-                                        <i class="bi bi-wikipedia"></i>
-                                    </a>
-                                </td>
-                                <td>{{ sim_artist.artist_name }}</td>
-                                <td>{{ sim_artist.total_score|perc }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                {% endif %}
+            <div class="col-4" id="similars_new_artists"
+                 hx-get="{% url 'similars_new_artists' %}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="spinner-border spinner-border-sm"></div>
             </div>
 
-
-            <!-- bad artists to be removed -->
-            <div class="col-5">
-                <h3>
-                    Worst artists to remove.
-                    <span class="no-blue" href="#" title="Refresh"
-                          hx-get="{% url 'similars' %}?refresh=lp"
-                          hx-trigger="click"
-                          hx-target="#main-container"
-                          hx-swap="innerHTML">
-                        <i class="bi bi-arrow-clockwise"></i>
-                    </span>
-                </h3>
-                <h6>Artists that have the lowest ratings (and all songs were at least played
-                    twice to give it a chance for a better rating).</h6>
-                {% if not last_played %}
-                    <p>No avg last played artists</p>
-                {% else %}
-                    <table class="table table-sm table-striped table-hover mt-1">
-                        <thead>
-                        <tr>
-                            <th>Rating</th>
-                            <th>Artist</th>
-                            <th>Avg played at</th>
-                            <th>2nd Chance</th>
-                        </tr>
-                        </thead>
-                        <tbody>
-                        {% for artist in last_played %}
-                            <tr>
-                                <td class="small">
-                                    <span class="text-muted">{{ artist.count_rated }} @</span>
-                                    {{ artist.rating|perc }}
-                                </td>
-                                <td>
-                                    <a href="#" class="no-blue"
-                                       hx-get="{% url 'artist' artist.id %}"
-                                       hx-target="#main-container"
-                                       hx-swap="innerHTML">
-                                        {{ artist.name }}
-                                    </a>
-                                </td>
-                                <td>{{ artist|played_at_over }}</td>
-                                <td>{{ artist|one_play_cnt }}</td>
-                            </tr>
-                        {% endfor %}
-                        </tbody>
-                    </table>
-                {% endif %}
+            <div class="col-5" id="similars_bad_albums"
+                 hx-get="{% url 'similars_bad_albums' %}"
+                 hx-trigger="load"
+                 hx-swap="innerHTML">
+                <div class="spinner-border spinner-border-sm"></div>
             </div>
-
 
         </div>
 

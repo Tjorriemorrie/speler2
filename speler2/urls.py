@@ -36,4 +36,11 @@ urlpatterns = [
     path('lyrics/<int:song_id>/', views.lyrics_view, name='lyric_view'),
     path('genre/<str:facet>/<int:facet_id>/<str:genre>/', views.genre_view, name='genre'),
     path('similars/', views.similars_view, name='similars'),
+    path(
+        'similars/missing-albums/',
+        views.similars_missing_albums_view,
+        name='similars_missing_albums',
+    ),
+    path('similars/new-artists/', views.similars_recommended_view, name='similars_new_artists'),
+    path('similars/bad-albums/', views.similars_bad_albums, name='similars_bad_albums'),
 ]

@@ -1,6 +1,38 @@
-[project]
-requires-python = ">=3.11"
+[build-system]
+requires = ["setuptools>=64", "wheel"]
+build-backend = "setuptools.build_meta"
 
+[project]
+name = "Speler"
+version = "2.0.0"
+requires-python = ">=3.11"
+dependencies = [
+    "beautifulsoup4",
+    "colorlog",
+    "crispy-bootstrap5",
+    "Django",
+    "django-crispy-forms",
+    "django-filter",
+    "django-tables2",
+    "environs",
+    "huggingface-hub",
+    "mutagen",
+    "requests",
+    "plotly",
+    "pylast",
+    "retry",
+    "simpleaudio",
+    "unidecode",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pre-commit",
+    "pytest",
+]
+
+[tool.setuptools]
+packages = ["speler2"]
 
 [tool.ruff]
 # The minimum Python version to target, e.g., when considering automatic code upgrades,

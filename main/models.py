@@ -64,7 +64,15 @@ class Artist(Timestamp, Rank):
             return 'https://en.wikipedia.org/wiki/Blink-182'
         if self.slug == 'the-all-american-rejects':
             return 'https://en.wikipedia.org/wiki/The_All-American_Rejects'
-        params = {'search': f'{self.name.replace("-", "_")} discography'}
+        if self.slug == 'bush':
+            return 'https://en.wikipedia.org/wiki/Bush_(British_band)'
+        if self.slug == 'architects':
+            return 'https://en.wikipedia.org/wiki/Architects_(British_band)'
+        if self.slug == 'crossfade':
+            return 'https://en.wikipedia.org/wiki/Crossfade_(American_band)'
+        params = {
+            'search': f'{self.name.replace("-", "_")}',
+        }
         url = f'https://www.wikipedia.org/w/index.php?{urlencode(params)}'
         return url
 

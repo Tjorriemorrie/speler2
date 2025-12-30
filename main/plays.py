@@ -1,9 +1,11 @@
 import logging
 import random
-from collections import defaultdict
-from datetime import datetime
+from collections import Counter, defaultdict
+from datetime import datetime, timedelta
 from typing import Tuple, Union
 
+import simpleaudio as sa
+from django.conf import settings
 from django.core.cache import cache
 from django.db import connection
 from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Value
@@ -12,15 +14,18 @@ from django.utils import timezone
 from django.utils.timezone import make_aware
 from unidecode import unidecode
 
-from main.constants import LIST_GENRES
+from main.constants import LIST_GENRES, RATINGS_WINDOW
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
-from main.selectors import get_recent_artists, list_lowest_rated_artists
+from main.selectors import get_recent_artists, list_lowest_rated_albums
 
 logger = logging.getLogger(__name__)
 
+song_limit = RATINGS_WINDOW // (4 * 7)
+artists_history_size_req = round(song_limit / 10, 1)
 
-def get_next_song() -> Song:
+
+def get_next_song() -> Song:  # noqa: PLR0912
     """Get next song to play."""
     max_played, time_till_last_played = get_next_song_priority_values()
 
@@ -41,11 +46,12 @@ def get_next_song() -> Song:
         logger.info(f'Filtering on genres {filter_genres}')
         query = query.filter(**filter_genres)
 
-    # bump the worst artists
-    worst_artist_ids = [a.id for a in list_lowest_rated_artists()]
+    # bump the worst albums
+    worst_albums_ids = [a.id for a in list_lowest_rated_albums()]
 
     # Annotate priority
-    weight = 0.1
+    weight_played_once = 0.15
+    weight_bad_album = 0.25
     songs_with_priority = (
         query.annotate(
             time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
@@ -59,12 +65,12 @@ def get_next_song() -> Song:
             priority=ExpressionWrapper(
                 F('base_priority')
                 + Case(
-                    When(count_played=1, then=Value(weight)),
+                    When(count_played=1, then=Value(weight_played_once)),
                     default=Value(0.0),
                     output_field=FloatField(),
                 )
                 + Case(
-                    When(artist_id__in=worst_artist_ids, then=Value(weight)),
+                    When(album_id__in=worst_albums_ids, then=Value(weight_bad_album)),
                     default=Value(0.0),
                     output_field=FloatField(),
                 ),
@@ -82,8 +88,7 @@ def get_next_song() -> Song:
         queue[history_artist.song.artist.name] = 0
 
     # Query once and store in memory (for rnd)
-    limit = 100
-    songs = list(songs_with_priority.all()[:limit])
+    songs = list(songs_with_priority.all()[:song_limit])
     next_song = None
     # Iterate over the songs and check if the artist was recently played
     for song in songs:
@@ -100,17 +105,33 @@ def get_next_song() -> Song:
             # logger.info(f'Has next song, but increasing artist already
             # in queue afterwards: {unidecode(song.artist.name)}')
 
+    cntr = Counter(queue.values())
+
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
-        logger.info(f'{"!"*5} Could not find any unplayed artist in first {limit} priority queue!')
         next_song = random.choice(songs)  # noqa: S311
+        cowbell_path = settings.SOUNDS_DIR / 'mixkit-cowbell-sharp-hit-1743.wav'
+        sa.WaveObject.from_wave_file(str(cowbell_path)).play()
+        logger.info(
+            f'{"!" * 5} Could not find any unplayed artist in first {song_limit} priority queue!'
+        )
+    elif cntr.get(0, 0) >= artists_history_size_req:
+        latest_created_at = Song.objects.latest('created_at').created_at
+        window_time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
+        if latest_created_at < window_time_ago:
+            waterdrop_path = settings.SOUNDS_DIR / 'mixkit-water-bubble-1317.wav'
+            wave_obj = sa.WaveObject.from_wave_file(str(waterdrop_path))
+            wave_obj.play()
+            logger.info(f'{"+" * 5} Add a new album! ({artists_history_size_req} no queue artists)')
+    # else:
+    #     logger.info(f'{":"*5} Found an artist in first {song_limit} priority queue')
     if not next_song:
         raise ValueError('Expected to get a song, but found nothing')
 
     for name, cnt in queue.items():
         symbol = '>' if next_song.artist.name == name else '-'
         cnt_txt = f'+++ {cnt}' if cnt else ''
-        logger.info(f'{symbol*5} {unidecode(name)} {cnt_txt}')
+        logger.info(f'{symbol * 5} {unidecode(name)} {cnt_txt}')
 
     logger.info(f'Next Song: {next_song}')
     # playd = next_song.count_played / max_played
@@ -181,11 +202,10 @@ def get_next_song_priority_values() -> Tuple[float, float]:
     max_played = float(Song.objects.aggregate(Max('count_played'))['count_played__max'])
 
     raw_sql = """
-        SELECT
-            MIN(julianday(played_at)) AS earliest_julian_day,
-            julianday('now') AS current_julian_day
-        FROM main_song
-    """
+              SELECT MIN(julianday(played_at)) AS earliest_julian_day,
+                     julianday('now')          AS current_julian_day
+              FROM main_song \
+              """
 
     # Execute raw SQL
     with connection.cursor() as cursor:

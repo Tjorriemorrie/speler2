@@ -463,3 +463,13 @@ a.play-icon {
     color: inherit;
     cursor: pointer;
 }
+
+
+/* CSS (or in a <style> block) */
+.hx-indicator {
+    transition: transform 200ms;
+}
+
+.htmx-request .hx-indicator {
+    transform: rotate(360deg);
+}

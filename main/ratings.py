@@ -29,8 +29,11 @@ def get_recent_songs_from_history() -> List[Song]:
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
     rate_count_cut_off = current_song.count_played * RATINGS_PER_PLAY
-    logger.info(f'Get match: is rated {current_song.count_rated} < {rate_count_cut_off}')
     if current_song.count_rated > rate_count_cut_off:
+        logger.info(
+            f'Get match: is rated {current_song.count_rated} '
+            f'(more than {rate_count_cut_off} cut off)'
+        )
         return
 
     songs = get_recent_songs_from_history()
@@ -65,7 +68,8 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
                 match = [current_song, b, c]
                 logger.info(f'Get match: {match}')
                 return match
-    logger.info(f'Could not find any match for {song_ids}')
+
+    logger.warning(f'Could not find any match for {song_ids}')
 
 
 def set_match_result(winner_id: int, loser_ids: List[int]):
