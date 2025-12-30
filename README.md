@@ -38,6 +38,21 @@ a little time to pass before repeating the same artist (showing how many is stil
 <img src="scrn4.png" width="600">
 
 
+#### Last.fm scrobbler integration
+
+Optionally, you can set the last.fm values in the .env file, and it will scrobble the songs you play
+```ini
+LASTFM_API_KEY=
+LASTFM_SECRET=
+```
+
+If you use that, it can also pull recommendations from last.fm:
+
+<img src="scrn5.png" width="600">
+
+It also checks wikipedia for artist info if you have missed an album (beta).
+
+
 ## How to use
 
 
