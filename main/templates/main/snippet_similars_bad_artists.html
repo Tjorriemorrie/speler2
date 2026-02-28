@@ -1,0 +1,62 @@
+{% load fmt %}
+
+<!-- bad artists to be removed -->
+<h4 class="d-flex align-items-center gap-2">
+    Bad artists
+
+    <button class="btn btn-sm btn-outline-primary border-0 p-1"
+            title="Refresh"
+            hx-get="{% url 'similars_bad_artists' %}?refresh=lp"
+            hx-trigger="click"
+            hx-target="#similars_bad_artists"
+            hx-swap="innerHTML"
+            hx-indicator="this">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+</h4>
+
+<h6>Lowest rated artists that haven't been played in the past 30 days.</h6>
+
+{% if not sim_worst_artists %}
+    <p>No worst artists</p>
+{% else %}
+    <table class="table table-sm table-striped table-hover mt-1">
+        <thead>
+        <tr>
+            <th>Rating</th>
+            <th>Artist</th>
+            <th>Albums</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for artist in sim_worst_artists.all %}
+            <tr>
+                <td class="small">
+                    <span class="text-muted">{{ artist.count_rated }} @</span>
+                    {{ artist.rating|perc }}
+                </td>
+                <td>
+                    <a href="#" class="no-blue"
+                       hx-get="{% url 'artist' artist.id %}"
+                       hx-target="#main-container"
+                       hx-swap="innerHTML">
+                        {{ artist.name }}
+                    </a>
+                </td>
+                <td>
+                    {% for album in artist.albums.all %}
+                        <a href="#" class="no-blue"
+                           hx-get="{% url 'album' album.id %}"
+                           hx-target="#main-container"
+                           hx-swap="innerHTML">
+                            <img class="img-fluid" title="{{ album.name }}"
+                             style="height: 1.7em;"
+                             src="{% url 'album_art' song_id=album.songs.first.id %}"/>
+                        </a>
+                    {% endfor %}
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endif %}

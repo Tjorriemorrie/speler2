@@ -207,14 +207,28 @@ def get_recent_artists() -> QuerySet[History]:
     return recent_histories
 
 
-def get_avg_last_albums() -> List[Album]:
+def get_avg_last_albums() -> QuerySet[Album]:
     """Get last albums by avg played."""
     return Album.objects.order_by(F('avg_played_at').asc(nulls_last=True))[:10]
 
 
-def list_lowest_rated_artists() -> List[Artist]:
-    """Get artists by lowest rating."""
-    return Artist.objects.exclude(rating__isnull=True).order_by('rating')[:10]
+def list_lowest_rated_artists(multiple_albums: bool = True) -> QuerySet[Artist]:
+    """Get artists by lowest rating, excluding those with plays in the past 30 days."""
+    from datetime import timedelta
+
+    time_threshold = timezone.now() - timedelta(days=30)
+    recent_artist_ids = (
+        History.objects.filter(played_at__gte=time_threshold)
+        .values_list('song__album__artist_id', flat=True)
+        .distinct()
+    )
+
+    return (
+        Artist.objects.filter(count_albums__gt=1 if multiple_albums else 0)
+        .exclude(rating__isnull=True)
+        .exclude(id__in=recent_artist_ids)
+        .order_by('rating')[:10]
+    )
 
 
 def list_lowest_rated_albums() -> List[Album]:

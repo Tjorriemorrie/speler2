@@ -7,7 +7,7 @@ from django.utils.http import urlencode
 from unidecode import unidecode
 
 from main import managers
-from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK
+from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK, RATINGS_WINDOW
 
 
 class Timestamp(models.Model):
@@ -21,15 +21,16 @@ class Timestamp(models.Model):
 class Rank:
     @property
     def rank(self):
-        """Get item rank."""
-        # Create a cache key based on the instance's class and primary key
-        cache_key = f'{self.__class__.__name__}_rank_{self.pk}'
+        """Get item rank as a percentile (1 = best, 99 = worst)."""
+        cache_key = f'{self.__class__.__name__}_prank_{self.pk}'
         rank = cache.get(cache_key)
 
         if rank is None:
-            # Use self.__class__.objects to access the manager at the class level
-            rank = self.__class__.objects.filter(rating__gt=self.rating).count() + 1
-            cache.set(cache_key, rank, timeout=3600)  # Cache for 1 hour
+            total = self.__class__.objects.count()
+            above = self.__class__.objects.filter(rating__gt=self.rating).count()
+            percentile = (above / max(total - 1, 1)) * 98 + 1
+            rank = min(round(percentile), 99)
+            cache.set(cache_key, rank, timeout=RATINGS_WINDOW)
 
         return rank
 

@@ -42,5 +42,11 @@ urlpatterns = [
         name='similars_missing_albums',
     ),
     path('similars/new-artists/', views.similars_recommended_view, name='similars_new_artists'),
+    path(
+        'similars/new-artists/remove/<slug:artist_slug>/',
+        views.similars_remove_artist,
+        name='similars_remove_artist',
+    ),
     path('similars/bad-albums/', views.similars_bad_albums, name='similars_bad_albums'),
+    path('similars/bad-artists/', views.similars_bad_artists, name='similars_bad_artists'),
 ]

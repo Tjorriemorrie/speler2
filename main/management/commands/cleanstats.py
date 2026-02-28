@@ -92,6 +92,9 @@ class Command(BaseCommand):
         updated_artist_ids = set()
 
         for i, album in enumerate(dirty_albums, start=1):
+            # ensure current values
+            album.count_songs = album.songs.count()
+
             # Ratings
             song_agg = album.songs.aggregate(
                 rating=Avg('rating'),
@@ -140,6 +143,11 @@ class Command(BaseCommand):
         logger.info(f'Cleaning {total} dirty artists...')
 
         for i, artist in enumerate(dirty_artists, start=1):
+            # ensure current values
+            artist.count_albums = artist.albums.count()
+            artist.count_songs = artist.songs.count()
+
+            # ratings
             album_agg = artist.albums.aggregate(
                 count_rated=Sum('count_rated'),
                 count_played=Sum('count_played'),

@@ -1,6 +1,6 @@
 import logging
 import random
-from collections import Counter, defaultdict
+from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Tuple, Union
 
@@ -17,12 +17,29 @@ from unidecode import unidecode
 from main.constants import LIST_GENRES, RATINGS_WINDOW
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
-from main.selectors import get_recent_artists, list_lowest_rated_albums
+from main.selectors import get_recent_artists
 
 logger = logging.getLogger(__name__)
 
-song_limit = RATINGS_WINDOW // (4 * 7)
-artists_history_size_req = round(song_limit / 10, 1)
+AVERAGE_SONG_LENGTH = 237.4
+num_songs_in_window = RATINGS_WINDOW / AVERAGE_SONG_LENGTH
+next_song_lookup_limit = num_songs_in_window // 0.1
+
+
+def should_add_new_album(history_artist_names: set, queue: dict) -> bool:
+    """Check if a new album should be added based on artist variety.
+
+    Conditions:
+    1. At least num_songs_in_window unique artists in the history window.
+    2. The upcoming songs for history artists in the queue should be less than
+       twice the number of unique history artists.
+    """
+    unique_count = len(history_artist_names)
+    if unique_count < num_songs_in_window:
+        return False
+
+    upcoming = sum(queue[name] for name in history_artist_names)
+    return upcoming < 2 * unique_count
 
 
 def get_next_song() -> Song:  # noqa: PLR0912
@@ -47,11 +64,11 @@ def get_next_song() -> Song:  # noqa: PLR0912
         query = query.filter(**filter_genres)
 
     # bump the worst albums
-    worst_albums_ids = [a.id for a in list_lowest_rated_albums()]
+    # worst_albums_ids = [a.id for a in list_lowest_rated_albums()]
 
     # Annotate priority
-    weight_played_once = 0.15
-    weight_bad_album = 0.25
+    weight_played_once = 0.26
+    # weight_bad_album = 0.4
     songs_with_priority = (
         query.annotate(
             time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
@@ -68,12 +85,12 @@ def get_next_song() -> Song:  # noqa: PLR0912
                     When(count_played=1, then=Value(weight_played_once)),
                     default=Value(0.0),
                     output_field=FloatField(),
-                )
-                + Case(
-                    When(album_id__in=worst_albums_ids, then=Value(weight_bad_album)),
-                    default=Value(0.0),
-                    output_field=FloatField(),
                 ),
+                # + Case(
+                #     When(album_id__in=worst_albums_ids, then=Value(weight_bad_album)),
+                #     default=Value(0.0),
+                #     output_field=FloatField(),
+                # )
                 output_field=FloatField(),
             )
         )
@@ -84,11 +101,13 @@ def get_next_song() -> Song:  # noqa: PLR0912
     # but exclude recent artist, to prevent single artist spam
     queue = defaultdict(int)
     history_artists = get_recent_artists()
+    history_artist_names = set()
     for history_artist in reversed(history_artists):
         queue[history_artist.song.artist.name] = 0
+        history_artist_names.add(history_artist.song.artist.name)
 
     # Query once and store in memory (for rnd)
-    songs = list(songs_with_priority.all()[:song_limit])
+    songs = list(songs_with_priority.all()[:next_song_lookup_limit])
     next_song = None
     # Iterate over the songs and check if the artist was recently played
     for song in songs:
@@ -96,6 +115,7 @@ def get_next_song() -> Song:  # noqa: PLR0912
             if song.artist.name not in queue:
                 next_song = song
                 queue[song.artist.name] = 0
+                history_artist_names.add(song.artist.name)
                 # logger.info(f'Found next song {next_song}')
             else:
                 queue[song.artist.name] += 1
@@ -105,24 +125,27 @@ def get_next_song() -> Song:  # noqa: PLR0912
             # logger.info(f'Has next song, but increasing artist already
             # in queue afterwards: {unidecode(song.artist.name)}')
 
-    cntr = Counter(queue.values())
-
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
         next_song = random.choice(songs)  # noqa: S311
         cowbell_path = settings.SOUNDS_DIR / 'mixkit-cowbell-sharp-hit-1743.wav'
         sa.WaveObject.from_wave_file(str(cowbell_path)).play()
         logger.info(
-            f'{"!" * 5} Could not find any unplayed artist in first {song_limit} priority queue!'
+            f'{"!" * 5} Could not find any unplayed artist in first {next_song_lookup_limit} priority queue!'
         )
-    elif cntr.get(0, 0) >= artists_history_size_req:
+    elif should_add_new_album(history_artist_names, queue):
         latest_created_at = Song.objects.latest('created_at').created_at
         window_time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
         if latest_created_at < window_time_ago:
             waterdrop_path = settings.SOUNDS_DIR / 'mixkit-water-bubble-1317.wav'
             wave_obj = sa.WaveObject.from_wave_file(str(waterdrop_path))
             wave_obj.play()
-            logger.info(f'{"+" * 5} Add a new album! ({artists_history_size_req} no queue artists)')
+            unique_count = len(history_artist_names)
+            upcoming = sum(queue[name] for name in history_artist_names)
+            logger.info(
+                f'{"+" * 5} Add a new album! '
+                f'({unique_count} unique history artists, {upcoming} upcoming songs)'
+            )
     # else:
     #     logger.info(f'{":"*5} Found an artist in first {song_limit} priority queue')
     if not next_song:
@@ -130,7 +153,7 @@ def get_next_song() -> Song:  # noqa: PLR0912
 
     for name, cnt in queue.items():
         symbol = '>' if next_song.artist.name == name else '-'
-        cnt_txt = f'+++ {cnt}' if cnt else ''
+        cnt_txt = f'{"+" * cnt}'
         logger.info(f'{symbol * 5} {unidecode(name)} {cnt_txt}')
 
     logger.info(f'Next Song: {next_song}')

@@ -24,6 +24,7 @@
             <th></th>
             <th>Artist</th>
             <th>Total Score</th>
+            <th></th>
         </tr>
         </thead>
         <tbody>
@@ -38,6 +39,16 @@
                 </td>
                 <td>{{ sim_artist.artist_name }}</td>
                 <td>{{ sim_artist.total_score|perc }}</td>
+                <td>
+                    <button class="btn btn-sm btn-outline-danger border-0 p-0"
+                            title="Remove artist"
+                            hx-get="{% url 'similars_remove_artist' sim_artist.artist_slug %}"
+                            hx-target="#similars_new_artists"
+                            hx-swap="innerHTML"
+                            hx-confirm="Remove {{ sim_artist.artist_name }} from recommendations?">
+                        <i class="bi bi-x-circle"></i>
+                    </button>
+                </td>
             </tr>
         {% endfor %}
         </tbody>

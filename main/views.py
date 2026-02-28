@@ -18,7 +18,7 @@ from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import search_azlyrics
-from main.models import Album, Artist, Song
+from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
@@ -29,6 +29,7 @@ from main.selectors import (
     get_songs_by_played_date_chart,
     get_top_percentile_songs,
     list_lowest_rated_albums,
+    list_lowest_rated_artists,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -423,6 +424,13 @@ def similars_recommended_view(request):
     return response
 
 
+def similars_remove_artist(request, artist_slug):
+    """Remove a recommended artist by deleting all Similar records for the given slug."""
+    Similar.objects.filter(artist_slug=artist_slug).delete()
+    cache.delete('sim_grouped_similar')
+    return similars_recommended_view(request)
+
+
 def similars_bad_albums(request):
     """List bad artists for removal."""
     ctx = {}
@@ -435,4 +443,19 @@ def similars_bad_albums(request):
     ctx['last_played'] = last_played
 
     response = render(request, 'main/snippet_similars_bad_albums.html', ctx)
+    return response
+
+
+def similars_bad_artists(request):
+    """List bad artists for removal."""
+    ctx = {}
+    refresh = request.GET.get('refresh')
+
+    worst_artists_key = 'sim_worst_artists'
+    if refresh == 'lp' or not (worst_artists := cache.get(worst_artists_key)):
+        worst_artists = list_lowest_rated_artists(False)
+        cache.set(worst_artists_key, worst_artists, timeout=3600 * 16)
+    ctx['sim_worst_artists'] = worst_artists
+
+    response = render(request, 'main/snippet_similars_bad_artists.html', ctx)
     return response

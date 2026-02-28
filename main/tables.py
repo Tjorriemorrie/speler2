@@ -418,7 +418,7 @@ class ArtistTable(tables.Table):
     )
 
     class Meta:
-        model = Album
+        model = Artist
         fields = (
             'rank',
             'rating',

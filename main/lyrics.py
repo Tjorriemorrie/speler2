@@ -115,6 +115,11 @@ def search_azlyrics(
     if instrument:
         lyrics = f'{artist_name} - {song_name}\n\n[Instrumental]'
     else:
+        fix_artist_names = {
+            'ghost': 'ghostbc',
+        }
+        if artist_name in fix_artist_names:
+            artist_name = fix_artist_names[artist_name]
         lyrics_txt = scrape_azlyrics(artist_name, song_name, url)
         lyrics = clean_text_with_paragraphs(lyrics_txt)
 
