@@ -11,7 +11,7 @@ class Command(BaseCommand):
     help = 'Fetch a response from Qwen2.5-Coder-32B-Instruct model using a user query'
 
     def add_arguments(self, parser):
-        # Adding argument to accept a query
+        """Register the `query` positional argument for the command."""
         parser.add_argument('query', type=str, help='The query to be processed by the model')
 
     def handle(self, *args, **kwargs):

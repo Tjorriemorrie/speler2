@@ -7,7 +7,7 @@ from django.utils.http import urlencode
 from unidecode import unidecode
 
 from main import managers
-from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK, RATINGS_WINDOW
+from main.constants import BILLBOARD_CHOICES, GENRE_CHOICES, GENRE_HARD_ROCK
 
 
 class Timestamp(models.Model):
@@ -22,6 +22,8 @@ class Rank:
     @property
     def rank(self):
         """Get item rank as a percentile (1 = best, 99 = worst)."""
+        from main.plays import RATINGS_WINDOW  # noqa: PLC0415  circular import
+
         cache_key = f'{self.__class__.__name__}_prank_{self.pk}'
         rank = cache.get(cache_key)
 

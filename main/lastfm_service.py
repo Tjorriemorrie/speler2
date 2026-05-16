@@ -197,7 +197,7 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
 
     # Strip year prefix from name if present
     for album_info in wiki_details['albums']:
-        if album_info['name'].startswith(album_info['year']):
+        if album_info['year'] and album_info['name'].startswith(album_info['year']):
             album_info['name'] = album_info['name'][5:]
 
     logger.info(f'Successfully scraped {len(wiki_details["albums"])} albums for {artist}')
@@ -312,7 +312,7 @@ def extract_albums_from_ul(albums_tag: bs4.element.Tag) -> List[dict]:
     return albums
 
 
-def extract_albums_from_table(albums_tag: bs4.element.Tag) -> list[dict[str, str]]:
+def extract_albums_from_table(albums_tag: bs4.element.Tag) -> list[dict[str, str]]:  # noqa: PLR0912, PLR0915
     """Extract album details from a table, handling multiple formats."""
     albums = []
 
@@ -350,37 +350,69 @@ def extract_albums_from_table(albums_tag: bs4.element.Tag) -> list[dict[str, str
                         year = match.group(1)
 
         else:
-            # Fallback: second format (year in first <td>, album in second <td>)
             cells = tr.find_all('td', recursive=False)
-            cells_req = 2
-            if len(cells) < cells_req:
-                continue  # skip header or non-album rows
+            if not cells:
+                continue  # skip header rows
 
-            # First <td> is the year
-            year_text = cells[0].get_text(strip=True)
-            match = re.search(r'\b(\d{4})\b', year_text)
-            year = match.group(1) if match else None
-
-            # Second <td> → only take the first <i> (the album title)
-            album_cell = cells[1]
-            i_tag = album_cell.find('i')
-            if i_tag:
-                name = i_tag.get_text(' ', strip=True)
-                anchor = i_tag.find('a')
+            # Format 2: first <td> has album title (<i>) + release details (<ul>)
+            # e.g. Trust Company — <td><i>Album</i><ul><li>Released: …</li></ul></td>
+            first_i = cells[0].find('i')
+            if first_i:
+                name = first_i.get_text(' ', strip=True)
+                anchor = first_i.find('a')
                 href = (
                     'https://en.wikipedia.org' + anchor['href']
                     if anchor and anchor.get('href')
                     else None
                 )
+                year = None
+                li_date = cells[0].find(
+                    'li',
+                    string=lambda s: s and 'Released' in s,
+                )
+                if li_date:
+                    match = re.search(r'\b(\d{4})\b', li_date.get_text())
+                    if match:
+                        year = match.group(1)
+                if year is None:
+                    match = re.search(
+                        r'\b(\d{4})\b',
+                        cells[0].get_text(' ', strip=True),
+                    )
+                    year = match.group(1) if match else None
+
+            # Format 3: year in first <td>, album in second <td>
             else:
-                # Fallback: just take text from cell
-                name = album_cell.get_text(' ', strip=True)
-                anchor = album_cell.find('a')
-                href = (
-                    'https://en.wikipedia.org' + anchor['href']
-                    if anchor and anchor.get('href')
-                    else None
-                )
+                cells_req = 2
+                if len(cells) < cells_req:
+                    continue  # skip non-album rows
+
+                year_text = cells[0].get_text(strip=True)
+                match = re.search(r'\b(\d{4})\b', year_text)
+                year = match.group(1) if match else None
+
+                album_cell = cells[1]
+                i_tag = album_cell.find('i')
+                if i_tag:
+                    name = i_tag.get_text(' ', strip=True)
+                    anchor = i_tag.find('a')
+                    href = (
+                        'https://en.wikipedia.org' + anchor['href']
+                        if anchor and anchor.get('href')
+                        else None
+                    )
+                else:
+                    name = album_cell.get_text(' ', strip=True)
+                    anchor = album_cell.find('a')
+                    href = (
+                        'https://en.wikipedia.org' + anchor['href']
+                        if anchor and anchor.get('href')
+                        else None
+                    )
+
+        # Skip entries without a concrete year (TBD / upcoming)
+        if not year:
+            continue
 
         albums.append(
             {

@@ -3,6 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
+# Cygwin/MSYS bash crash dumps
+*.stackdump
+
 # C extensions
 *.so
 

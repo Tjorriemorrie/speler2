@@ -13,14 +13,14 @@ from django.utils.cache import patch_cache_control
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 
-from main.constants import GENRE_CHOICES, RATINGS_WINDOW
+from main.constants import GENRE_CHOICES
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import search_azlyrics
 from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, validate_songs
-from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
+from main.plays import RATINGS_WINDOW, get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 from main.selectors import (
     get_albums_by_year_chart,

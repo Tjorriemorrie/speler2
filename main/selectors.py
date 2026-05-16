@@ -1,28 +1,31 @@
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from random import randint
 from typing import List
 
 import plotly.graph_objects as go
 from django.core.cache import cache
 from django.db import connection
-from django.db.models import Avg, Count, F, Max, Q, QuerySet, Sum
+from django.db.models import Avg, Count, F, Max, Min, Q, QuerySet, Sum
 from django.db.models.expressions import RawSQL
-from django.db.models.functions import TruncDate
+from django.db.models.functions import TruncDate, TruncWeek
 from django.utils import timezone
 from django.utils.timezone import make_aware
 
-from main.constants import RATINGS_WINDOW
 from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
+
+DAILY_TO_WEEKLY_THRESHOLD_DAYS = 365
 
 
 def get_play_count_chart():
     """Chart play count bar."""
     cache_key = 'play_count'
     if graph := cache.get(cache_key):
+        logger.info(f'Graph served from cache: {cache_key}')
         return graph
+    logger.info(f'Graph rendering fresh: {cache_key}')
 
     # Query to aggregate song play count
     song_stats = (
@@ -59,7 +62,9 @@ def get_albums_by_year_chart():
     """Chart albums by year."""
     cache_key = 'albums_by_year'
     if graph := cache.get(cache_key):
+        logger.info(f'Graph served from cache: {cache_key}')
         return graph
+    logger.info(f'Graph rendering fresh: {cache_key}')
 
     # Query to aggregate song play count
     album_stats = (
@@ -99,7 +104,9 @@ def get_albums_per_artist_chart():
     """Chart the number of artists with a specific album count."""
     cache_key = 'albums_per_artist'
     if graph := cache.get(cache_key):
+        logger.info(f'Graph served from cache: {cache_key}')
         return graph
+    logger.info(f'Graph rendering fresh: {cache_key}')
 
     # Query to count the number of artists for each album count
     stats = (
@@ -137,31 +144,40 @@ def get_songs_by_played_date_chart():
     """Chart number of songs played per date."""
     cache_key = 'songs_by_date'
     if graph := cache.get(cache_key):
+        logger.info(f'Graph served from cache: {cache_key}')
         return graph
+    logger.info(f'Graph rendering fresh: {cache_key}')
 
-    # Step 1: Query to group songs by date
+    # Switch from daily to weekly buckets once data spans more than 12 months
+    first_played = History.objects.aggregate(first=Min('played_at'))['first']
+    span_days = (timezone.now() - first_played).days if first_played else 0
+    use_weekly = span_days > DAILY_TO_WEEKLY_THRESHOLD_DAYS
+    logger.info(
+        f'songs_by_date: first_played={first_played}, span_days={span_days}, '
+        f'mode={"weekly" if use_weekly else "daily"}'
+    )
+
+    trunc = TruncWeek('played_at') if use_weekly else TruncDate('played_at')
     date_stats = (
-        History.objects.annotate(played_date=TruncDate('played_at'))
+        History.objects.annotate(played_date=trunc)
         .values('played_date')
         .annotate(song_count=Count('id'))
         .order_by('played_date')
     )
 
-    # Step 2: Extract the dates and counts for the x and y axes
     x = [stat['played_date'] for stat in date_stats]
     y = [stat['song_count'] for stat in date_stats]
 
-    # Step 3: Create the bar chart using graph_objects
     fig = go.Figure(data=[go.Bar(x=x, y=y)])
 
-    # Step 4: Customize the layout
     fig.update_layout(
-        title='Number of Songs Played per Date',
-        xaxis_title='Date',
+        title='Number of Songs Played per Week'
+        if use_weekly
+        else 'Number of Songs Played per Date',
+        xaxis_title='Week' if use_weekly else 'Date',
         yaxis_title='Number of Songs',
         autosize=True,
         margin=dict(l=20, r=20, t=30, b=20),
-        # xaxis=dict(tickmode='auto', dtick=86400000, tickformat='%d %b'),
     )
 
     # Step 5: Convert the Plotly figure to an HTML string (without full HTML)
@@ -199,6 +215,8 @@ def get_top_percentile_songs(artist: Artist, percentile: float) -> List[Song]:
 def get_recent_artists() -> QuerySet[History]:
     """Get recent artists."""
     # Calculate the time window (40 minutes ago)
+    from main.plays import RATINGS_WINDOW  # noqa: PLC0415  circular import
+
     time_threshold = timezone.now() - timezone.timedelta(seconds=RATINGS_WINDOW)
 
     # Query the History model for songs played in the time window
@@ -214,8 +232,6 @@ def get_avg_last_albums() -> QuerySet[Album]:
 
 def list_lowest_rated_artists(multiple_albums: bool = True) -> QuerySet[Artist]:
     """Get artists by lowest rating, excluding those with plays in the past 30 days."""
-    from datetime import timedelta
-
     time_threshold = timezone.now() - timedelta(days=30)
     recent_artist_ids = (
         History.objects.filter(played_at__gte=time_threshold)

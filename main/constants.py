@@ -1,5 +1,3 @@
-RATINGS_WINDOW = 60 * 20  # minutes
-
 GENRE_CHRISTIAN = 'christian'
 GENRE_POP_DANCE = 'pop and dance'
 GENRE_SOFT_ROCK = 'soft rock'

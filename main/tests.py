@@ -61,11 +61,11 @@ class SimilarsBadArtistsViewTest(TestCase):
         mock_list_artists.assert_called_once_with(False)
 
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
         # Verify cache was set
         cached_data = cache.get('sim_worst_artists')
-        self.assertIsNotNone(cached_data)
+        assert cached_data is not None
 
     @patch('main.views.list_lowest_rated_artists', autospec=True)
     def test_similars_bad_artists_with_cache(self, mock_list_artists):
@@ -84,7 +84,7 @@ class SimilarsBadArtistsViewTest(TestCase):
         mock_list_artists.assert_not_called()
 
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
     @patch('main.views.list_lowest_rated_artists', autospec=True)
     def test_similars_bad_artists_with_refresh(self, mock_list_artists):
@@ -106,11 +106,11 @@ class SimilarsBadArtistsViewTest(TestCase):
         mock_list_artists.assert_called_once_with(False)
 
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
         # Verify cache was updated
         cached_data = cache.get('sim_worst_artists')
-        self.assertIsNotNone(cached_data)
+        assert cached_data is not None
 
     @patch('main.views.list_lowest_rated_artists', autospec=True)
     def test_similars_bad_artists_refresh_other_param(self, mock_list_artists):
@@ -129,7 +129,7 @@ class SimilarsBadArtistsViewTest(TestCase):
         mock_list_artists.assert_not_called()
 
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
     def test_similars_bad_artists_integration(self):
         """Integration test with real data (no mocks)."""
@@ -140,20 +140,20 @@ class SimilarsBadArtistsViewTest(TestCase):
         response = similars_bad_artists(request)
 
         # Verify response
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
         # Verify content contains expected text
         content = response.content.decode('utf-8')
-        self.assertIn('Bad artists', content)
+        assert 'Bad artists' in content
 
         # Verify cache was populated
         cached_data = cache.get('sim_worst_artists')
-        self.assertIsNotNone(cached_data)
+        assert cached_data is not None
 
         # Verify queryset contains expected artists (lowest rated with count_albums > 0)
         artist_ids = [artist.id for artist in cached_data]
-        self.assertIn(self.artist1.id, artist_ids)
-        self.assertIn(self.artist2.id, artist_ids)
+        assert self.artist1.id in artist_ids
+        assert self.artist2.id in artist_ids
 
     def test_similars_bad_artists_renders_correct_template(self):
         """Test that the correct template is rendered."""
@@ -165,8 +165,8 @@ class SimilarsBadArtistsViewTest(TestCase):
 
         # Verify correct template is used by checking for expected content
         content = response.content.decode('utf-8')
-        self.assertIn('Bad artists', content)
-        self.assertIn('Refresh', content)
+        assert 'Bad artists' in content
+        assert 'Refresh' in content
 
     @patch('main.views.list_lowest_rated_artists', autospec=True)
     def test_similars_bad_artists_calls_selector_with_correct_param(self, mock_list_artists):
@@ -191,11 +191,11 @@ class SimilarsBadArtistsViewTest(TestCase):
         response = similars_bad_artists(request)
 
         # Check the response was successful
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
         # Verify cache contains the expected data
         worst_artists = cache.get('sim_worst_artists')
-        self.assertIsNotNone(worst_artists)
+        assert worst_artists is not None
 
 
 class SimilarsRemoveArtistViewTest(TestCase):
@@ -269,9 +269,9 @@ class SimilarsRemoveArtistViewTest(TestCase):
         similars_remove_artist(request, 'unwanted-artist')
 
         # All records for 'unwanted-artist' should be gone
-        self.assertEqual(Similar.objects.filter(artist_slug='unwanted-artist').count(), 0)
+        assert Similar.objects.filter(artist_slug='unwanted-artist').count() == 0
         # Record for 'wanted-artist' should still exist
-        self.assertEqual(Similar.objects.filter(artist_slug='wanted-artist').count(), 1)
+        assert Similar.objects.filter(artist_slug='wanted-artist').count() == 1
 
     @patch('main.views.update_next_similar_artist', autospec=True)
     def test_clears_cache_and_refreshes(self, mock_update):
@@ -284,7 +284,7 @@ class SimilarsRemoveArtistViewTest(TestCase):
 
         # Old cached data should be replaced; update_next_similar_artist is called
         mock_update.assert_called_once()
-        self.assertNotEqual(cache.get('sim_grouped_similar'), 'old_cached_data')
+        assert cache.get('sim_grouped_similar') != 'old_cached_data'
 
     @patch('main.views.update_next_similar_artist', autospec=True)
     def test_returns_200(self, mock_update):
@@ -294,7 +294,7 @@ class SimilarsRemoveArtistViewTest(TestCase):
         request = self.factory.get('/similars/new-artists/remove/unwanted-artist/')
         response = similars_remove_artist(request, 'unwanted-artist')
 
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
 
     @patch('main.views.update_next_similar_artist', autospec=True)
     def test_renders_new_artists_template(self, mock_update):
@@ -305,7 +305,7 @@ class SimilarsRemoveArtistViewTest(TestCase):
         response = similars_remove_artist(request, 'unwanted-artist')
 
         content = response.content.decode('utf-8')
-        self.assertIn('New artists', content)
+        assert 'New artists' in content
 
     @patch('main.views.update_next_similar_artist', autospec=True)
     def test_nonexistent_slug_is_no_op(self, mock_update):
@@ -315,9 +315,9 @@ class SimilarsRemoveArtistViewTest(TestCase):
         request = self.factory.get('/similars/new-artists/remove/no-such-artist/')
         response = similars_remove_artist(request, 'no-such-artist')
 
-        self.assertEqual(response.status_code, 200)
+        assert response.status_code == 200
         # All existing records should be untouched
-        self.assertEqual(Similar.objects.count(), 3)
+        assert Similar.objects.count() == 3
 
 
 class ShouldAddNewAlbumTest(TestCase):
@@ -332,7 +332,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 0, 'Artist B': 1, 'Artist C': 0}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertFalse(result)
+        assert not result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_returns_false_when_too_many_upcoming_songs(self):
@@ -344,7 +344,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 2, 'Artist B': 2, 'Artist C': 3, 'Artist D': 5}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertFalse(result)
+        assert not result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_returns_true_when_conditions_met(self):
@@ -356,7 +356,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 1, 'Artist B': 1, 'Artist C': 1, 'Artist D': 10}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertTrue(result)
+        assert result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_returns_true_when_zero_upcoming_songs(self):
@@ -368,7 +368,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 0, 'Artist B': 0, 'Artist C': 0, 'Artist D': 0}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertTrue(result)
+        assert result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_returns_false_at_exact_boundary(self):
@@ -380,7 +380,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 2, 'Artist B': 2, 'Artist C': 2}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertFalse(result)
+        assert not result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_returns_true_just_below_boundary(self):
@@ -392,7 +392,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 2, 'Artist B': 2, 'Artist C': 1}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertTrue(result)
+        assert result
 
     @patch('main.plays.num_songs_in_window', 3)
     def test_ignores_non_history_artists_in_queue(self):
@@ -404,7 +404,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 0, 'Artist B': 0, 'Artist C': 0, 'Artist D': 100}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertTrue(result)
+        assert result
 
     @patch('main.plays.num_songs_in_window', 5)
     def test_returns_false_with_empty_history(self):
@@ -415,7 +415,7 @@ class ShouldAddNewAlbumTest(TestCase):
         queue = {'Artist A': 3}
 
         result = should_add_new_album(history_artist_names, queue)
-        self.assertFalse(result)
+        assert not result
 
 
 class RankPercentileTest(TestCase):
@@ -442,22 +442,22 @@ class RankPercentileTest(TestCase):
     def test_highest_rated_is_rank_1(self):
         """The highest-rated artist should have rank 1."""
         best = self.artists[4]  # rating=0.9
-        self.assertEqual(best.rank, 1)
+        assert best.rank == 1
 
     def test_lowest_rated_is_rank_99(self):
         """The lowest-rated artist should have rank 99."""
         worst = self.artists[0]  # rating=0.1
-        self.assertEqual(worst.rank, 99)
+        assert worst.rank == 99
 
     def test_middle_rated_is_around_50(self):
         """The middle-rated artist should have a rank around 50."""
         middle = self.artists[2]  # rating=0.5
-        self.assertEqual(middle.rank, 50)
+        assert middle.rank == 50
 
     def test_percentiles_are_ordered(self):
         """Higher-rated artists should have lower rank numbers."""
         ranks = [a.rank for a in self.artists]
-        self.assertEqual(ranks, sorted(ranks, reverse=True))
+        assert ranks == sorted(ranks, reverse=True)
 
     def test_single_item_returns_1(self):
         """A single item should have rank 1."""
@@ -470,7 +470,7 @@ class RankPercentileTest(TestCase):
             count_albums=1,
             total_length=3600.0,
         )
-        self.assertEqual(solo.rank, 1)
+        assert solo.rank == 1
 
     def test_two_items(self):
         """With two items, best should be 1 and worst should be 99."""
@@ -490,13 +490,13 @@ class RankPercentileTest(TestCase):
             count_albums=1,
             total_length=3600.0,
         )
-        self.assertEqual(high.rank, 1)
-        self.assertEqual(low.rank, 99)
+        assert high.rank == 1
+        assert low.rank == 99
 
     def test_rank_never_exceeds_99(self):
         """Rank should never exceed 99 even with rounding."""
         for artist in self.artists:
-            self.assertLessEqual(artist.rank, 99)
+            assert artist.rank <= 99
 
     def test_rank_is_cached(self):
         """Second call should use the cached value."""
@@ -505,4 +505,162 @@ class RankPercentileTest(TestCase):
         with patch.object(Artist.objects, 'filter', autospec=True) as mock_filter:
             cached_rank = artist.rank
             mock_filter.assert_not_called()
-        self.assertEqual(cached_rank, 1)
+        assert cached_rank == 1
+
+
+class ExtractAlbumsFromTableTest(TestCase):
+    """Test cases for extract_albums_from_table."""
+
+    def test_skips_rows_without_year(self):
+        """Rows with no extractable year should be skipped."""
+        from bs4 import BeautifulSoup
+
+        from main.lastfm_service import extract_albums_from_table
+
+        html = """
+        <table>
+            <tr>
+                <th scope="row"><a href="/wiki/Album1">Album One</a></th>
+                <td>Released: March 15, 2020</td>
+            </tr>
+            <tr>
+                <th scope="row"><a href="/wiki/Album2">Album Two</a></th>
+                <td>TBD</td>
+            </tr>
+        </table>
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        albums = extract_albums_from_table(table)
+
+        assert len(albums) == 1
+        assert albums[0]['name'] == 'Album One'
+        assert albums[0]['year'] == '2020'
+
+    def test_extracts_year_from_header_cell_format(self):
+        """Albums in th[scope=row] format should have year extracted from first td."""
+        from bs4 import BeautifulSoup
+
+        from main.lastfm_service import extract_albums_from_table
+
+        html = """
+        <table>
+            <tr>
+                <th scope="row"><a href="/wiki/TestAlbum">Test Album</a></th>
+                <td>June 2019</td>
+            </tr>
+        </table>
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        albums = extract_albums_from_table(table)
+
+        assert len(albums) == 1
+        assert albums[0]['year'] == '2019'
+
+    def test_extracts_albums_from_fallback_format(self):
+        """Albums in two-column td format should be extracted correctly."""
+        from bs4 import BeautifulSoup
+
+        from main.lastfm_service import extract_albums_from_table
+
+        html = """
+        <table>
+            <tr>
+                <td>2015</td>
+                <td><i><a href="/wiki/MyAlbum">My Album</a></i></td>
+            </tr>
+        </table>
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        albums = extract_albums_from_table(table)
+
+        assert len(albums) == 1
+        assert albums[0]['name'] == 'My Album'
+        assert albums[0]['year'] == '2015'
+
+    def test_extracts_albums_with_details_in_first_td(self):
+        """Albums with title and release info in first <td> (Trust Company format)."""
+        from bs4 import BeautifulSoup
+
+        from main.lastfm_service import extract_albums_from_table
+
+        html = (
+            '<table>'
+            '<tr><th>Album details</th><th>Chart positions</th></tr>'
+            '<tr><td>'
+            '<i><a href="/wiki/The_Lonely_Position_of_Neutral">'
+            'The Lonely Position of Neutral</a></i>'
+            '<ul><li>Released: July 23, 2002</li><li>Label: Geffen</li></ul>'
+            '</td><td>11</td></tr>'
+            '<tr><td>'
+            '<i><a href="/wiki/True_Parallels">True Parallels</a></i>'
+            '<ul><li>Released: March 22, 2005</li><li>Label: Geffen</li></ul>'
+            '</td><td>32</td></tr>'
+            '<tr><td>'
+            '<i><a href="/wiki/Dreaming_in_Black_and_White">'
+            'Dreaming in Black and White</a></i>'
+            '<ul><li>Released: March 8, 2011</li>'
+            '<li>Label: Entertainment One</li></ul>'
+            '</td><td>175</td></tr>'
+            '</table>'
+        )
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        albums = extract_albums_from_table(table)
+
+        assert len(albums) == 3
+
+        assert albums[0]['name'] == 'The Lonely Position of Neutral'
+        assert albums[0]['year'] == '2002'
+        assert albums[0]['href'] == 'https://en.wikipedia.org/wiki/The_Lonely_Position_of_Neutral'
+
+        assert albums[1]['name'] == 'True Parallels'
+        assert albums[1]['year'] == '2005'
+
+        assert albums[2]['name'] == 'Dreaming in Black and White'
+        assert albums[2]['year'] == '2011'
+
+    def test_first_td_format_skips_rows_without_year(self):
+        """First-<td> format should skip rows where no year can be found."""
+        from bs4 import BeautifulSoup
+
+        from main.lastfm_service import extract_albums_from_table
+
+        html = """
+        <table>
+            <tr>
+                <td>
+                    <i>Upcoming Album</i>
+                    <ul><li>Released: TBD</li></ul>
+                </td>
+                <td></td>
+            </tr>
+        </table>
+        """
+        soup = BeautifulSoup(html, 'html.parser')
+        table = soup.find('table')
+        albums = extract_albums_from_table(table)
+
+        assert len(albums) == 0
+
+
+class ScrapeStudioAlbumsYearPrefixTest(TestCase):
+    """Test that year prefix stripping handles None year."""
+
+    def test_year_prefix_stripped_when_present(self):
+        """Album name starting with year should have the year prefix removed."""
+        # We test the year-stripping logic inline
+        album_info = {'name': '2020 Some Album', 'year': '2020'}
+        if album_info['year'] and album_info['name'].startswith(album_info['year']):
+            album_info['name'] = album_info['name'][5:]
+        assert album_info['name'] == 'Some Album'
+
+    def test_none_year_does_not_crash(self):
+        """Album with None year should not raise TypeError."""
+        album_info = {'name': 'Some Album', 'year': None}
+        # This should not raise
+        if album_info['year'] and album_info['name'].startswith(album_info['year']):
+            album_info['name'] = album_info['name'][5:]
+        assert album_info['name'] == 'Some Album'

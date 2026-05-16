@@ -14,16 +14,35 @@ from django.utils import timezone
 from django.utils.timezone import make_aware
 from unidecode import unidecode
 
-from main.constants import LIST_GENRES, RATINGS_WINDOW
+from main.constants import LIST_GENRES
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
 from main.selectors import get_recent_artists
 
 logger = logging.getLogger(__name__)
 
-AVERAGE_SONG_LENGTH = 237.4
-num_songs_in_window = RATINGS_WINDOW / AVERAGE_SONG_LENGTH
-next_song_lookup_limit = num_songs_in_window // 0.1
+MIN_SONGS_FOR_AVG = 100
+DEFAULT_AVG_SONG_LENGTH = 240.0
+MIN_LOOKUP_LIMIT = 50
+
+
+def _compute_average_song_length() -> float:
+    song_count = Song.objects.count()
+    if song_count < MIN_SONGS_FOR_AVG:
+        return DEFAULT_AVG_SONG_LENGTH
+    avg_length = Song.objects.aggregate(avg=Avg('track_length'))['avg']
+    return float(avg_length) if avg_length else DEFAULT_AVG_SONG_LENGTH
+
+
+def _compute_next_song_lookup_limit() -> int:
+    artist_count = Artist.objects.count()
+    return max(artist_count, MIN_LOOKUP_LIMIT)
+
+
+AVERAGE_SONG_LENGTH = _compute_average_song_length()
+next_song_lookup_limit = _compute_next_song_lookup_limit()
+num_songs_in_window = next_song_lookup_limit * 0.1
+RATINGS_WINDOW = num_songs_in_window * AVERAGE_SONG_LENGTH
 
 
 def should_add_new_album(history_artist_names: set, queue: dict) -> bool:
@@ -39,11 +58,12 @@ def should_add_new_album(history_artist_names: set, queue: dict) -> bool:
         return False
 
     upcoming = sum(queue[name] for name in history_artist_names)
-    return upcoming < 2 * unique_count
+    return upcoming < 3 * unique_count
 
 
-def get_next_song() -> Song:  # noqa: PLR0912
+def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     """Get next song to play."""
+    logger.info(f'Ratings window is {RATINGS_WINDOW / 60:.0f} min')
     max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
@@ -131,7 +151,8 @@ def get_next_song() -> Song:  # noqa: PLR0912
         cowbell_path = settings.SOUNDS_DIR / 'mixkit-cowbell-sharp-hit-1743.wav'
         sa.WaveObject.from_wave_file(str(cowbell_path)).play()
         logger.info(
-            f'{"!" * 5} Could not find any unplayed artist in first {next_song_lookup_limit} priority queue!'
+            f'{"!" * 5} Could not find any unplayed artist in first '
+            f'{next_song_lookup_limit} priority queue!'
         )
     elif should_add_new_album(history_artist_names, queue):
         latest_created_at = Song.objects.latest('created_at').created_at

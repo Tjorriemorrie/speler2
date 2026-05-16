@@ -1,13 +1,12 @@
 import logging
-import random
 import shutil
 from pathlib import Path
-from statistics import mean
 
 from django.conf import settings
 from django.core.management.base import BaseCommand
 
-from main.models import Artist
+from main.constants import GENRE_METAL
+from main.models import Song
 
 logger = logging.getLogger(__name__)
 
@@ -23,65 +22,58 @@ class Command(BaseCommand):
             default=32,
             help='Limit in GB (default: 32)',
         )
+        parser.add_argument(
+            '--no-metal',
+            action='store_true',
+            help='Exclude metal genre songs',
+        )
 
     def handle(self, *args, **options):
         """Copy top-rated songs to external directory up to size limit."""
         limit_gb = options['limit']
         limit_bytes = limit_gb * (1024**3)
+        no_metal = options['no_metal']
 
         external_dir: Path = settings.EXTERNAL_DIR
         external_dir.mkdir(parents=True, exist_ok=True)
 
-        total_size = 0
-        has_space = True
-
-        selected = []
-        i = 0
-        rating_cutoff = 0
-        while has_space:
-            ratings = []
-            added = 0
-            for artist in Artist.objects.all():
-                song = artist.songs.order_by('-rating', '-count_played')[i]
-                if song.rating > rating_cutoff:
-                    src = song.file_path()
-                    if not src.is_file():
-                        logger.warning(f'Missing file: {src}')
-                        continue
-
-                    size = src.stat().st_size
-                    if total_size + size > limit_bytes:
-                        logger.info(
-                            f'Reached size limit '
-                            f'({total_size / (1024 ** 3):.2f} GB / {limit_gb:.2f} GB)'
-                        )
-                        has_space = False
-                        break
-
-                    total_size += size
-                    ratings.append(song.rating)
-                    selected.append(song)
-                    added += 1
-                    # logger.info(f'Added {i + 1}: {song}')
-
-            logger.info(
-                f'Added {added} songs at iteration {i} with rating cutoff {rating_cutoff:.2f}'
+        songs_qs = Song.objects.select_related('artist', 'album').order_by(
+            '-count_played', '-rating'
+        )
+        if no_metal:
+            songs_qs = (
+                songs_qs.exclude(genre=GENRE_METAL)
+                .exclude(artist__genre=GENRE_METAL)
+                .exclude(album__genre=GENRE_METAL)
             )
 
-            # adjust rating cutoff for next song for each artist
-            cut_off = 10
-            if len(ratings) < cut_off:
-                logger.info('Not enough songs to continue selection.')
-                break
-            rating_cutoff = mean(ratings)
-            i += 1
+        total_size = 0
+        selected = []
+        for song in songs_qs.iterator():
+            src = song.file_path()
+            if not src.is_file():
+                logger.warning(f'Missing file: {src}')
+                continue
 
-        random.shuffle(selected)
-        for idx, song in enumerate(selected, start=1):
+            size = src.stat().st_size
+            if total_size + size > limit_bytes:
+                logger.info(
+                    f'Reached size limit ({total_size / (1024**3):.2f} GB / {limit_gb:.2f} GB)'
+                )
+                break
+
+            total_size += size
+            selected.append(song)
+
+        for song in selected:
             src = song.file_path()
 
-            prefix = str(idx).zfill(3)  # "001", "002", etc.
-            dest_filename = f'{prefix}_{src.name}'
+            suffix = src.suffix
+            dest_filename = (
+                f'{song.artist.name} - {song.album.name} - '
+                f'{song.track_number:02d} {song.name}{suffix}'
+            )
+            dest_filename = _sanitize_filename(dest_filename)
             dest = external_dir / dest_filename
 
             try:
@@ -94,5 +86,13 @@ class Command(BaseCommand):
 
         logger.info(
             f'✅ Copied {len(selected)} songs, '
-            f'total {(total_size / (1024 ** 3)):.2f} GB to {external_dir}'
+            f'total {(total_size / (1024**3)):.2f} GB to {external_dir}'
         )
+
+
+def _sanitize_filename(name: str) -> str:
+    """Replace characters that are invalid in filenames on Windows/other FS."""
+    invalid = '<>:"/\\|?*'
+    for ch in invalid:
+        name = name.replace(ch, '_')
+    return name

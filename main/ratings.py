@@ -7,7 +7,6 @@ from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
-from main.constants import RATINGS_WINDOW
 from main.models import History, Rating, Song
 
 logger = logging.getLogger(__name__)
@@ -17,6 +16,8 @@ RATINGS_PER_PLAY = 5
 
 def get_recent_songs_from_history() -> List[Song]:
     """Get recent histories of last half hour, limited to 10."""
+    from main.plays import RATINGS_WINDOW  # noqa: PLC0415  circular import
+
     time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
     histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()
     songs = []
