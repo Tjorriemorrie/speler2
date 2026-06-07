@@ -10,6 +10,7 @@ django_tables2==2.7.0
 environs==11.0.0
 huggingface_hub==0.26.2
 mutagen==1.47.0
+Pillow==12.2.0
 requests==2.32.3
 plotly==5.24.1
 pylast==5.3.0

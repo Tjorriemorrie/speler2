@@ -42,16 +42,23 @@ $(document).ready(function () {
 
             // Update the song source dynamically
             let songSrc = $('#songData').data('songsrc');
+            const mimeTypes = {
+                'mp3': 'audio/mp3',
+                'flac': 'audio/flac',
+                'm4a': 'audio/mp4'
+            };
+            const ext = songSrc.split('?')[0].split('.').pop().toLowerCase();
+            const mimeType = mimeTypes[ext] || 'audio/mp3';
             player.source = {
                 type: 'audio',
                 sources: [
                     {
                         src: songSrc,
-                        type: 'audio/mp3'  // Adjust this if your audio is in a different format
+                        type: mimeType
                     }
                 ]
             };
-            console.log("Song source set to", songSrc);
+            console.log("Song source set to", songSrc, "as", mimeType);
 
             // Set the volume based on song rating
             // Scale rating from [0, 1] to [0.1, 1] exponentially

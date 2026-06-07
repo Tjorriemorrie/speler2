@@ -222,6 +222,7 @@ CRISPY_TEMPLATE_PACK = 'bootstrap5'
 MUSIC_DIR = Path(env('MUSIC_DIR'))
 EXTERNAL_DIR = BASE_DIR / '_external'
 USE_MP3 = env.bool('USE_MP3')
+USE_FLAC = env.bool('USE_FLAC', default=False)
 ALBUMS_DIR = BASE_DIR / '.albums'
 LYRICS_DIR = BASE_DIR / '.lyrics'
 

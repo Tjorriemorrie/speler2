@@ -192,6 +192,14 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
 
     if albums_tag.name == 'ul':
         wiki_details['albums'] = extract_albums_from_ul(albums_tag)
+        # Collect albums from additional <ul> blocks (e.g. "As Blyss" / "As Lifehouse")
+        tag = albums_tag
+        while True:
+            tag = tag.find_next_sibling()
+            if tag is None or (tag.name == 'div' and 'mw-heading2' in tag.get('class', [])):
+                break
+            if tag.name == 'ul':
+                wiki_details['albums'].extend(extract_albums_from_ul(tag))
     elif albums_tag.name == 'table':
         wiki_details['albums'] = extract_albums_from_table(albums_tag)
 

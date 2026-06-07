@@ -17,6 +17,8 @@ This is an album-based player, where the UI is optimized for browsing full album
 ## Features
 Nice app-like interface using HTMX.
 
+Supports MP3 and FLAC files (toggle each format via `USE_MP3` / `USE_FLAC` in `.env`).
+
 Automatically fetches lyrics for each song.
 
 If you set it to listen on 0.0.0.0, then you can access it from other devices in your

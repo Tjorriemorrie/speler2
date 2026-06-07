@@ -10,12 +10,14 @@ from django.db.models.functions import Cast
 from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.timezone import make_aware
-from mutagen import id3, mp3, mp4
+from mutagen import flac, id3, mp3, mp4
 from unidecode import unidecode
 
 from main.models import Album, Artist, Song
 
 logger = logging.getLogger(__name__)
+
+FLAC_PICTURE_FRONT_COVER = 3
 
 
 def scan_directory(*args, **kwargs):
@@ -27,6 +29,8 @@ def scan_directory(*args, **kwargs):
     patterns = []
     if settings.USE_MP3:
         patterns.append('*.mp3')
+    if settings.USE_FLAC:
+        patterns.append('*.flac')
     if not patterns:
         raise ValueError('Require at least one pattern. Recommend USE_MP3')
 
@@ -146,10 +150,13 @@ def add_new_audio_file(
 def parse_id3_tag(file_path: str) -> dict:
     """Get metadata based on file type."""
     logger.info(unidecode(f'Parsing ID3 tag for {file_path}'))
-    if file_path.suffix == '.mp3':
+    suffix = file_path.suffix.lower()
+    if suffix == '.mp3':
         metadata = get_mp3_metadata(file_path)
-    elif file_path.suffix == '.m4a':
+    elif suffix == '.m4a':
         metadata = get_m4a_metadata(file_path)
+    elif suffix == '.flac':
+        metadata = get_flac_metadata(file_path)
     else:
         raise NotImplementedError(f'Unsupported file extension for {file_path}')
     logger.info(f'Parsed metadata: {unidecode(str(metadata))}')
@@ -197,6 +204,42 @@ def get_m4a_metadata(file_path) -> dict:
     return info
 
 
+def get_flac_metadata(file_path) -> dict:
+    """Extract metadata from FLAC files (Vorbis comments)."""
+    info = {}
+    audio = flac.FLAC(file_path)
+    info['track_length'] = audio.info.length
+
+    info['song_title'] = str(audio.get('title', ['Unknown Title'])[0])
+    info['artist_name'] = str(audio.get('artist', ['Unknown Artist'])[0])
+    info['album_name'] = str(audio.get('album', ['Unknown Album'])[0])
+
+    track_raw = str(audio.get('tracknumber', ['1'])[0])
+    if '/' in track_raw:
+        track_num, track_total = track_raw.split('/', 1)
+        info['track_number'] = int(track_num)
+        info['total_tracks'] = int(track_total)
+    else:
+        info['track_number'] = int(track_raw)
+        total_raw = audio.get('tracktotal') or audio.get('totaltracks')
+        info['total_tracks'] = int(str(total_raw[0])) if total_raw else None
+
+    disc_raw = str(audio.get('discnumber', ['1'])[0])
+    if '/' in disc_raw:
+        disc_num, disc_total = disc_raw.split('/', 1)
+        info['disc_number'] = int(disc_num)
+        info['total_discs'] = int(disc_total)
+    else:
+        info['disc_number'] = int(disc_raw)
+        total_disc_raw = audio.get('disctotal') or audio.get('totaldiscs')
+        info['total_discs'] = int(str(total_disc_raw[0])) if total_disc_raw else 1
+
+    year_raw = str(audio.get('date', audio.get('year', ['0000']))[0])[:4]
+    info['year'] = int(year_raw) if year_raw.isdigit() else 0
+
+    return info
+
+
 def validate_songs(delete: bool = True) -> List[Song]:
     """Ensure songs in db has files."""
     logger.info('Validating songs...')
@@ -231,10 +274,23 @@ def validate_songs(delete: bool = True) -> List[Song]:
 def get_album_art(song: Song):
     """Get album art from metadata."""
     file_path = settings.MUSIC_DIR / song.rel_path
-    audio_file = mp3.MP3(file_path, ID3=id3.ID3)
-    for tag in audio_file.tags.values():
-        if tag.FrameID == 'APIC':  # APIC frame stores album artwork
-            return tag
+    suffix = file_path.suffix.lower()
+    if suffix == '.mp3':
+        audio_file = mp3.MP3(file_path, ID3=id3.ID3)
+        if audio_file.tags is None:
+            return None
+        for tag in audio_file.tags.values():
+            if tag.FrameID == 'APIC':  # APIC frame stores album artwork
+                return tag
+        return None
+    if suffix == '.flac':
+        audio = flac.FLAC(file_path)
+        # Prefer the front cover (type=3), otherwise fall back to the first picture
+        front = next((p for p in audio.pictures if p.type == FLAC_PICTURE_FRONT_COVER), None)
+        if front:
+            return front
+        return audio.pictures[0] if audio.pictures else None
+    return None
 
 
 def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
