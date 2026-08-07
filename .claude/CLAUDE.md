@@ -18,3 +18,21 @@ without requiring the user to repeat the information later.
 2. Minimum code that solves the problem. Nothing speculative.
 3. Touch only what you must. Clean up only your own mess.
 4. Define success criteria. Loop until verified.
+
+## Lyrics scraping (AZLyrics)
+
+- AZLyrics blocks on the TLS/HTTP2 fingerprint, not headers or IP. `main/lyrics.py`
+  fetches via `curl_cffi` and rotates through `AZLYRICS_IMPERSONATE` (in
+  `main/constants.py`) until a profile
+  is not served the captcha page. Which profiles pass rotates over time — when the
+  browser check returns, re-test the targets and reorder that tuple rather than
+  reaching for a headless browser.
+- Block pages come in variants off one template: the captcha one ("detected unusual
+  activity from your IP address") and a "request for access" / "your IP address will
+  be unblocked soon" one with no captcha. All of them carry the `az_unblock` form and
+  return HTTP 200, so detection matches on `BROWSER_CHECK_TEXTS`, not status. A block
+  page that slips past detection surfaces as a confusing parse error
+  (`not enough b_tags: 0`) — add the new marker instead of touching the parser.
+- Never auto-solve the captcha. When every profile is blocked, `BrowserCheckError`
+  carries the blocked url; the lyrics view links straight to it and pre-fills the
+  retry form so the user solves it by hand in their own browser and hits Retry.

@@ -10,6 +10,7 @@ dependencies = [
     "beautifulsoup4",
     "colorlog",
     "crispy-bootstrap5",
+    "curl_cffi",
     "Django",
     "django-crispy-forms",
     "django-filter",

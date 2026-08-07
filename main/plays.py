@@ -1,9 +1,11 @@
 import logging
+import math
 import random
 from collections import defaultdict
 from datetime import datetime, timedelta
 from typing import Tuple, Union
 
+import numpy as np
 import simpleaudio as sa
 from django.conf import settings
 from django.core.cache import cache
@@ -24,6 +26,10 @@ logger = logging.getLogger(__name__)
 MIN_SONGS_FOR_AVG = 100
 DEFAULT_AVG_SONG_LENGTH = 240.0
 MIN_LOOKUP_LIMIT = 50
+COUNTDOWN_MIN_POINTS = 3
+COUNTDOWN_MIN_SLOPE = -1e-6
+COUNTDOWN_ALPHA = 0.25
+COUNTDOWN_MAX_POINTS = 20
 
 
 def _compute_average_song_length() -> float:
@@ -41,24 +47,8 @@ def _compute_next_song_lookup_limit() -> int:
 
 AVERAGE_SONG_LENGTH = _compute_average_song_length()
 next_song_lookup_limit = _compute_next_song_lookup_limit()
-num_songs_in_window = next_song_lookup_limit * 0.1
-RATINGS_WINDOW = num_songs_in_window * AVERAGE_SONG_LENGTH
-
-
-def should_add_new_album(history_artist_names: set, queue: dict) -> bool:
-    """Check if a new album should be added based on artist variety.
-
-    Conditions:
-    1. At least num_songs_in_window unique artists in the history window.
-    2. The upcoming songs for history artists in the queue should be less than
-       twice the number of unique history artists.
-    """
-    unique_count = len(history_artist_names)
-    if unique_count < num_songs_in_window:
-        return False
-
-    upcoming = sum(queue[name] for name in history_artist_names)
-    return upcoming < 3 * unique_count
+num_slots_in_window = next_song_lookup_limit * 0.09
+RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH
 
 
 def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
@@ -154,21 +144,71 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             f'{"!" * 5} Could not find any unplayed artist in first '
             f'{next_song_lookup_limit} priority queue!'
         )
-    elif should_add_new_album(history_artist_names, queue):
+    elif next_song:
+        space_per_artist = 3
+        unique_count = len(history_artist_names)
+        # get top queued artist counts for slot size
+        upcoming = (
+            sum(queue[name] for name in history_artist_names) / len(history_artist_names)
+            - space_per_artist
+        )
+        # smooth before storing: each song moves the raw average by a discrete
+        # step, so the series zig-zags and a line fitted through it twitches.
+        # an EMA damps the song-to-song jitter but still follows a real change
+        countdown = cache.get('add_album_countdown', [])
+        smoothed = (
+            COUNTDOWN_ALPHA * upcoming + (1 - COUNTDOWN_ALPHA) * countdown[-1]
+            if countdown
+            else upcoming
+        )
+        # cap the history: too long a window keeps one big album add dominating
+        # the slope long after the queue has moved past it
+        countdown_window = min(int(num_slots_in_window * 2), COUNTDOWN_MAX_POINTS)
+        countdown = (countdown + [smoothed])[-countdown_window:]
+        cache.set('add_album_countdown', countdown, timeout=None)
+        logger.info(f'Countdown ({upcoming:.2f}): {", ".join(f"{x:.2f}" for x in countdown)}')
+
+        # if can add, first check if a new album was not already added in the last
+        # window timeframe
         latest_created_at = Song.objects.latest('created_at').created_at
         window_time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
-        if latest_created_at < window_time_ago:
-            waterdrop_path = settings.SOUNDS_DIR / 'mixkit-water-bubble-1317.wav'
-            wave_obj = sa.WaveObject.from_wave_file(str(waterdrop_path))
-            wave_obj.play()
-            unique_count = len(history_artist_names)
-            upcoming = sum(queue[name] for name in history_artist_names)
-            logger.info(
-                f'{"+" * 5} Add a new album! '
-                f'({unique_count} unique history artists, {upcoming} upcoming songs)'
+        if latest_created_at > window_time_ago:
+            logger.info(f'{"." * 5} Add album: recently added')
+
+        # first fill up queue to see if artists has repeats lined up
+        elif unique_count < num_slots_in_window:
+            logger.info(f'{"." * 5} Add album: {unique_count}/{num_slots_in_window:.0f} artists')
+
+        # songs still to listen to before an album is due
+        elif upcoming > 0:
+            # queue has too many repeats per artist, listen it out
+            # give countdown estimate: extrapolate the current value down at
+            # the recent slope. fitting the whole history instead lets old
+            # spikes steepen the line, and -b/m then ignores where we are now
+            # polyfit needs the guard first: on fewer than 3 points a degree-1
+            # fit is underdetermined and returns nan, which passes any
+            # comparison below and then blows up in math.ceil
+            m = (
+                np.polyfit(np.arange(len(countdown)), countdown, 1)[0]
+                if len(countdown) >= COUNTDOWN_MIN_POINTS
+                else 0.0
             )
-    # else:
-    #     logger.info(f'{":"*5} Found an artist in first {song_limit} priority queue')
+            # need a real downward trend to extrapolate; a flat/near-zero
+            # slope makes the division blow up (and 2 equal points fit flat)
+            if m >= COUNTDOWN_MIN_SLOPE:
+                logger.info(f'{"." * 5} Add album: oo (q/a {upcoming:.2f})')
+            else:
+                # extrapolate from the smoothed value, not the raw one:
+                # the slope came off the EMA series, so mixing in the
+                # unsmoothed numerator puts the jitter straight back
+                steps_remaining = max(math.ceil(smoothed / -m), 0)
+                logger.info(
+                    f'{"." * 5} Add album: in ~{steps_remaining} songs (q/a {upcoming:.2f})'
+                )
+        else:
+            waterdrop_path = settings.SOUNDS_DIR / 'mixkit-water-bubble-1317.wav'
+            sa.WaveObject.from_wave_file(str(waterdrop_path)).play()
+            logger.info(f'{"+" * 5} Add album: do it!')
     if not next_song:
         raise ValueError('Expected to get a song, but found nothing')
 

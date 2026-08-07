@@ -4,6 +4,7 @@ from datetime import datetime
 from pathlib import Path
 
 import requests
+from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
@@ -17,7 +18,7 @@ from main.constants import GENRE_CHOICES
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
-from main.lyrics import search_azlyrics
+from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, validate_songs
 from main.plays import RATINGS_WINDOW, get_next_song, handle_genre_filter, set_genre, set_played
@@ -317,7 +318,14 @@ def lyrics_view(request, song_id: int):
 
     try:
         lyrics = search_azlyrics(song, refresh, instrument, url)
-    except (requests.RequestException, ValueError) as exc:
+    except BrowserCheckError as exc:
+        # Only the user can clear the captcha: send them to the blocked page and let
+        # them retry the same url once they have.
+        ctx['error'] = str(exc)
+        ctx['form'] = URLForm(song_id=song.id, initial={'url': exc.url})
+        ctx['lookup_url'] = exc.url
+        return render(request, 'main/partial_lyrics.html', ctx)
+    except (requests.RequestException, CurlRequestException, ValueError) as exc:
         # Render the form with the exception message pre-filled in the input
         ctx['error'] = str(exc)
         form = URLForm(song_id=song.id)

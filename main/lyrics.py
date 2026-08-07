@@ -1,11 +1,13 @@
 import logging
 import re
 from datetime import datetime
+from http import HTTPStatus
 from pathlib import Path
 from xml.etree import ElementTree
 
 import requests
 from bs4 import BeautifulSoup
+from curl_cffi import requests as curl_requests
 from django.conf import settings
 from django.db.models import Max
 from django.utils import timezone
@@ -14,11 +16,29 @@ from unidecode import unidecode
 
 from main.constants import (
     AZLYRICS_ARTISTS,
+    AZLYRICS_IMPERSONATE,
     BILLBOARD_CHART_URLS,
 )
 from main.models import Billboard, Song
 
 logger = logging.getLogger(__name__)
+
+# AZLyrics serves several block pages off one template: the captcha one and a
+# "request for access"/"unblocked soon" one with no captcha at all. They all carry
+# the az_unblock form, which the lyrics pages never do.
+BROWSER_CHECK_TEXTS = (
+    'detected unusual activity from your IP address',
+    'az_unblock',
+)
+
+
+class BrowserCheckError(ValueError):
+    """AZLyrics served its captcha page for every impersonation profile."""
+
+    def __init__(self, url: str):
+        """Keep the blocked url so the view can send the user there to solve it."""
+        self.url = url
+        super().__init__(f'Browser check required! Solve it at url: {url}')
 
 
 def get_lyrics_chartlyrics(song: Song, use_cache: bool = True) -> str:
@@ -130,6 +150,20 @@ def search_azlyrics(
     return lyrics
 
 
+def fetch_azlyrics(url: str) -> str:
+    """Fetch an AZLyrics page, rotating browser fingerprints past the browser check."""
+    for impersonate in AZLYRICS_IMPERSONATE:
+        res = curl_requests.get(url, impersonate=impersonate, timeout=15)
+        if res.status_code != HTTPStatus.OK:
+            # curl_cffi leaves the url out of its own HTTPError message
+            raise ValueError(f'HTTP {res.status_code} for url: {url}')
+        if not any(text in res.text for text in BROWSER_CHECK_TEXTS):
+            logger.info(f'AZLyrics: fetched {url} as {impersonate}')
+            return res.text
+        logger.info(f'AZLyrics: browser check served to {impersonate}')
+    raise BrowserCheckError(url)
+
+
 def scrape_azlyrics(artist_name: str, song_name: str, url: str = None) -> str:
     """Search AZ lyrics for song."""
     # url = 'https://search.azlyrics.com/search.php'
@@ -167,12 +201,9 @@ def scrape_azlyrics(artist_name: str, song_name: str, url: str = None) -> str:
         url_page = f'https://www.azlyrics.com/lyrics/{artist_name}/{song_name}.html'
 
     # get lyrics
-    res_l = requests.get(url_page, timeout=15)
-    res_l.raise_for_status()
-    soup = BeautifulSoup(res_l.content, 'html.parser')
+    html = fetch_azlyrics(url_page)
+    soup = BeautifulSoup(html, 'html.parser')
     main_div = soup.find('div', class_='container main-page')
-    if 'detected unusual activity from your IP address' in soup.text:
-        raise ValueError('Browser check required!')
     b_tags = main_div.find_all('b')
     if len(b_tags) < 2:  # noqa: PLR2004
         logger.info(f'{soup.prettify()}')

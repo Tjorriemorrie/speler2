@@ -48,3 +48,15 @@ AZLYRICS_ARTISTS = {
     'thirtysecondstomars': '30secondstomars',
     'u2': 'u2band',
 }
+
+# AZLyrics blocks on the TLS/HTTP2 fingerprint, so requests are made with curl_cffi
+# impersonating a real browser. Which profiles get served the captcha rotates over
+# time; probed 2026-07-28, keep the passing ones first.
+AZLYRICS_IMPERSONATE = (
+    'firefox144',
+    'chrome131',
+    'safari184',
+    'edge101',
+    'chrome116',
+    'safari260',
+)
