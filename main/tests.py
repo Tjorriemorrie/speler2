@@ -2,8 +2,9 @@ from unittest.mock import patch
 
 from django.core.cache import cache
 from django.test import RequestFactory, TestCase
+from django.urls import reverse
 
-from main.models import Artist, Similar
+from main.models import Album, Artist, Similar, Song
 from main.views import similars_bad_artists, similars_remove_artist
 
 
@@ -664,3 +665,101 @@ class ScrapeStudioAlbumsYearPrefixTest(TestCase):
         if album_info['year'] and album_info['name'].startswith(album_info['year']):
             album_info['name'] = album_info['name'][5:]
         assert album_info['name'] == 'Some Album'
+
+
+class SongTitleViewTest(TestCase):
+    """Test cases for the inline song title edit view."""
+
+    def setUp(self):
+        """Set up a song to rename."""
+        artist = Artist.objects.create(
+            name='Edit Artist',
+            slug='edit-artist',
+            count_albums=1,
+            total_length=100.0,
+        )
+        album = Album.objects.create(
+            artist=artist,
+            name='Edit Album',
+            slug='edit-artist-edit-album',
+            year=2000,
+            total_discs=1,
+            total_tracks=1,
+            total_length=100.0,
+        )
+        self.song = Song.objects.create(
+            artist=artist,
+            album=album,
+            rel_path='edit-artist/edit-album/01 song.mp3',
+            slug='edit-artist-edit-album-01-song-mp3',
+            name='Bad Title [HQ]',
+            disc_number=1,
+            track_number=1,
+            track_length=100.0,
+        )
+        self.url = reverse('song_title', kwargs={'song_id': self.song.id})
+
+    def test_get_renders_title_with_edit_pencil(self):
+        """Plain GET should render the title and the pencil link."""
+        response = self.client.get(self.url)
+        content = response.content.decode('utf-8')
+
+        assert response.status_code == 200
+        assert 'Bad Title [HQ]' in content
+        assert 'bi-pencil' in content
+        assert '<input' not in content
+
+    def test_get_edit_renders_form(self):
+        """GET with edit=1 should render the input pre-filled with the title."""
+        response = self.client.get(self.url, {'edit': '1'})
+        content = response.content.decode('utf-8')
+
+        assert response.status_code == 200
+        assert 'name="name"' in content
+        assert 'value="Bad Title [HQ]"' in content
+
+    @patch('main.views.write_song_title', autospec=True)
+    def test_post_updates_db_and_file(self, mock_write):
+        """A valid POST should write the file and update the song."""
+        response = self.client.post(self.url, {'name': 'Good Title'})
+        content = response.content.decode('utf-8')
+
+        mock_write.assert_called_once_with(self.song, 'Good Title')
+        self.song.refresh_from_db()
+        assert self.song.name == 'Good Title'
+        assert 'Good Title' in content
+        assert '<input' not in content
+
+    @patch('main.views.write_song_title', autospec=True)
+    def test_post_strips_whitespace(self, mock_write):
+        """Surrounding whitespace should be trimmed off the new title."""
+        self.client.post(self.url, {'name': '  Good Title  '})
+
+        mock_write.assert_called_once_with(self.song, 'Good Title')
+        self.song.refresh_from_db()
+        assert self.song.name == 'Good Title'
+
+    @patch('main.views.write_song_title', autospec=True)
+    def test_post_empty_title_is_rejected(self, mock_write):
+        """An empty title should not touch the file or the song."""
+        response = self.client.post(self.url, {'name': '   '})
+        content = response.content.decode('utf-8')
+
+        mock_write.assert_not_called()
+        self.song.refresh_from_db()
+        assert self.song.name == 'Bad Title [HQ]'
+        assert 'Title cannot be empty' in content
+        assert 'name="name"' in content
+
+    @patch('main.views.write_song_title', autospec=True)
+    def test_post_keeps_db_unchanged_when_file_write_fails(self, mock_write):
+        """A failed file write should leave the song name as it was."""
+        mock_write.side_effect = OSError('file is locked')
+
+        response = self.client.post(self.url, {'name': 'Good Title'})
+        content = response.content.decode('utf-8')
+
+        self.song.refresh_from_db()
+        assert self.song.name == 'Bad Title [HQ]'
+        assert 'file is locked' in content
+        assert 'value="Good Title"' in content

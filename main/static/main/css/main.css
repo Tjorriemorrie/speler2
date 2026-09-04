@@ -243,6 +243,52 @@ a.nav-link.skip-control {
     font-weight: bold;
 }
 
+/* track title wraps instead of ellipsing, with an edit pencil on row hover */
+.song-title-cell {
+    position: relative;
+    max-width: 20em;
+    padding-right: 1.6em !important;
+    white-space: normal;
+    overflow-wrap: break-word;
+}
+
+.song-title-cell .title-edit {
+    position: absolute;
+    right: 0.4em;
+    top: 50%;
+    transform: translateY(-50%);
+    color: #999;
+    visibility: hidden;
+}
+
+tr:hover .title-edit,
+.song-title-cell .title-edit:focus {
+    visibility: visible;
+}
+
+.song-title-cell .title-edit:hover {
+    color: #333;
+}
+
+.song-title-cell .form-control {
+    display: inline-block;
+    width: auto;
+}
+
+/* Large LG > 992 */
+@media (min-width: 992px) {
+    .song-title-cell {
+        max-width: 30em;
+    }
+}
+
+/* Extra large XL > 1200 */
+@media (min-width: 1200px) {
+    .song-title-cell {
+        max-width: 40em;
+    }
+}
+
 
 /************************** YEAR VIEW ***********************************/
 

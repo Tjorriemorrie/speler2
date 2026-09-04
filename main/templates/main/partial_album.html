@@ -90,7 +90,7 @@
                         <th>Genre</th>
                     </tr>
                     </thead>
-                    <tbody class="table-group-divider">
+                    <tbody class="table-group-divider align-middle">
                     {% for song in songs %}
                         <tr class="{% if song.id == current_song_id %}fw-bold{% endif %}">
                             <td class="d-none d-xl-table-cell">{{ song.rank }}</td>
@@ -100,7 +100,7 @@
                             </td>
                             <td>{% iconrank song.rating 5 1 0 %}</td>
                             <td>{{ song|trck }}</td>
-                            <td class="ellipsis">
+                            <td class="song-title-cell">
                                 <a class="play-icon" href="#" style="font-size: 0.8em;"
                                    hx-get="{% url 'lyric_view' song.id %}"
                                    hx-target="#lyrics-container"
@@ -114,7 +114,7 @@
                                    hx-swap="innerHTML">
                                     <i class="bi bi-play-circle"></i>
                                 </a>
-                                {{ song.name }}
+                                {% include 'main/snippet_song_title.html' with song=song %}
                             </td>
                             <td>{{ song.track_length|dur }}</td>
                             <td>

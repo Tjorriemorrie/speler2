@@ -420,3 +420,24 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
 
     # ensure to remove dud artists or albums that could be orphans
     validate_songs()
+
+
+def write_song_title(song: Song, title: str) -> None:
+    """Write song title to the audio file metadata."""
+    file_path = song.file_path().resolve()
+    suffix = file_path.suffix.lower()
+    if suffix == '.mp3':
+        meta = id3.ID3(file_path)
+        meta['TIT2'] = id3.TIT2(encoding=3, text=title)
+        meta.save()
+    elif suffix == '.m4a':
+        meta = mp4.MP4(file_path)
+        meta['\xa9nam'] = [title]
+        meta.save()
+    elif suffix == '.flac':
+        meta = flac.FLAC(file_path)
+        meta['title'] = [title]
+        meta.save()
+    else:
+        raise NotImplementedError(f'Unsupported file extension for {file_path}')
+    logger.info(unidecode(f'Wrote title {title} to {file_path}'))

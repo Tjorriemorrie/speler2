@@ -30,14 +30,17 @@ $(document).ready(function () {
     });
 
     // Listen for HTMX swap events
-    $(document).on('htmx:afterSwap', function (event) {
+    $(document).on('htmx:after:swap', function (event) {
+        // htmx 4 fires this on the source element, so the swapped container is on the context
+        const swapTarget = event.detail.ctx.target;
+
         // Only scroll to top when pagination links are clicked (or similar elements)
-        if ($(event.detail.target).is('#main-container')) {
+        if ($(swapTarget).is('#main-container')) {
             window.scrollTo({top: 0, behavior: 'smooth'});
         }
 
         // Check if the swap happened in the #player-container
-        if ($(event.target).is('#player-container')) {
+        if ($(swapTarget).is('#player-container')) {
             console.log("player-container htmx swapped");
 
             // Update the song source dynamically

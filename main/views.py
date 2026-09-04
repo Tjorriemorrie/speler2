@@ -13,6 +13,7 @@ from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
+from mutagen import MutagenError
 
 from main.constants import GENRE_CHOICES
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
@@ -20,7 +21,7 @@ from main.forms import URLForm
 from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
-from main.musicfiles import get_album_art, validate_songs
+from main.musicfiles import get_album_art, validate_songs, write_song_title
 from main.plays import RATINGS_WINDOW, get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 from main.selectors import (
@@ -387,6 +388,36 @@ def genre_view(request, facet: str, facet_id: int, genre: str):
         response['HX-Trigger'] = f'refresh{refresh.title()}'
 
     return response
+
+
+def song_title_view(request: WSGIRequest, song_id: int) -> HttpResponse:
+    """Show or save an inline edit of the song title."""
+    song = get_object_or_404(Song, id=song_id)
+    ctx = {'song': song, 'value': song.name}
+
+    if request.method != 'POST':
+        ctx['editing'] = bool(request.GET.get('edit'))
+        return render(request, 'main/snippet_song_title.html', ctx)
+
+    name = request.POST.get('name', '').strip()
+    ctx['value'] = name
+    if not name:
+        ctx['editing'] = True
+        ctx['error'] = 'Title cannot be empty'
+        return render(request, 'main/snippet_song_title.html', ctx)
+
+    try:
+        # write the file first: a failure there must not leave the db out of sync
+        write_song_title(song, name)
+    except (OSError, NotImplementedError, MutagenError) as exc:
+        logger.exception(f'Could not write title to {song.rel_path}')
+        ctx['editing'] = True
+        ctx['error'] = str(exc)
+        return render(request, 'main/snippet_song_title.html', ctx)
+
+    song.name = name
+    song.save()
+    return render(request, 'main/snippet_song_title.html', ctx)
 
 
 def similars_view(request):

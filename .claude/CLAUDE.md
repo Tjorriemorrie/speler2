@@ -36,3 +36,32 @@ without requiring the user to repeat the information later.
 - Never auto-solve the captcha. When every profile is blocked, `BrowserCheckError`
   carries the blocked url; the lyrics view links straight to it and pre-fills the
   retry form so the user solves it by hand in their own browser and hits Retry.
+
+## htmx
+
+- Vendored at `main/static/main/htmx-4.0.0/htmx.min.js`, loaded from `base.html`. **htmx 4**,
+  not 2 — the semantics differ in ways that bite silently:
+  - **Attribute inheritance is explicit.** A parent's `hx-target`/`hx-swap`/`hx-confirm` etc. does
+    *not* reach descendants unless written as `hx-target:inherited`. Today every element declares
+    its own, so there is no `:inherited` anywhere — keep it that way rather than switching on
+    `htmx.config.implicitInheritance`.
+  - **Events are colon-separated** (`htmx:after:swap`, not `htmx:afterSwap`), and the detail is
+    `{ctx}`. The event fires on `ctx.sourceElement`, so the swapped container is
+    `event.detail.ctx.target` — `event.target` is the clicked element and will not match the
+    container (see the handler in `main/static/main/js/player.js`).
+  - **4xx/5xx responses swap** (only 204/304 don't). An error `HttpResponse` or a Django 404/500
+    page renders into whatever container made the request, so keep error bodies presentable.
+  - **GET/DELETE do not include an enclosing form.** `hx-get` on a `<form>` still serializes it,
+    but `hx-get` on a button *inside* a form sends nothing from it — use `hx-include` if needed.
+- The official upgrade checker ships inside the npm package and is worth re-running after template
+  work: `npx htmx.org@4.0.0 upgrade-check -- .` (needs python3). Its `[inheritance]` hits are
+  heuristic — it flags a parent whenever any descendant has `hx-get`, without checking whether that
+  descendant declares its own attribute, so verify before adding `:inherited`.
+
+## Metadata edits
+
+- Track titles are editable inline on the album track listing (pencil appears on row hover,
+  `snippet_song_title.html` + `song_title_view`). The audio file is the source of truth —
+  `recheck_metadata` re-reads it and overwrites the db — so ui edits write the tag first via
+  `musicfiles.write_song_title`, then save the model. Any future field made editable must keep
+  that file-then-db order, otherwise a failed write silently desyncs the two.

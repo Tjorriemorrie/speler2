@@ -1,0 +1,37 @@
+{% if editing %}
+
+    <form id="song-{{ song.id }}-title" class="d-inline-flex align-items-center gap-1"
+          hx-post="{% url 'song_title' song.id %}"
+          hx-target="this"
+          hx-swap="outerHTML"
+          hx-on::after:init="this.querySelector('input[name=name]').select()">
+        {% csrf_token %}
+        <input type="text" name="name" class="form-control form-control-sm"
+               value="{{ value }}" size="30"/>
+        <button type="submit" class="btn btn-sm btn-link no-blue p-0" title="Save">
+            <i class="bi bi-check-lg"></i>
+        </button>
+        <a class="no-blue" href="#" title="Cancel"
+           hx-get="{% url 'song_title' song.id %}"
+           hx-target="#song-{{ song.id }}-title"
+           hx-swap="outerHTML">
+            <i class="bi bi-x-lg"></i>
+        </a>
+        {% if error %}
+            <span class="text-danger small">{{ error }}</span>
+        {% endif %}
+    </form>
+
+{% else %}
+
+    <span id="song-{{ song.id }}-title">
+        {{ song.name }}
+        <a class="title-edit no-blue" href="#" title="Edit title"
+           hx-get="{% url 'song_title' song.id %}?edit=1"
+           hx-target="#song-{{ song.id }}-title"
+           hx-swap="outerHTML">
+            <i class="bi bi-pencil"></i>
+        </a>
+    </span>
+
+{% endif %}

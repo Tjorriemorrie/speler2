@@ -26,10 +26,9 @@ logger = logging.getLogger(__name__)
 MIN_SONGS_FOR_AVG = 100
 DEFAULT_AVG_SONG_LENGTH = 240.0
 MIN_LOOKUP_LIMIT = 50
-COUNTDOWN_MIN_POINTS = 3
+COUNTDOWN_MIN_POINTS = 4
 COUNTDOWN_MIN_SLOPE = -1e-6
-COUNTDOWN_ALPHA = 0.25
-COUNTDOWN_MAX_POINTS = 20
+COUNTDOWN_ALPHA = 0.2
 
 
 def _compute_average_song_length() -> float:
@@ -45,15 +44,34 @@ def _compute_next_song_lookup_limit() -> int:
     return max(artist_count, MIN_LOOKUP_LIMIT)
 
 
+def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, None]:
+    """Extrapolate a smoothed metric's history down its recent slope to a song count.
+
+    Returns None when the series isn't trending down enough to extrapolate
+    (too few points, or flat/rising), meaning the countdown is unbounded.
+    """
+    m = (
+        np.polyfit(np.arange(len(series)), series, 1)[0]
+        if len(series) >= COUNTDOWN_MIN_POINTS
+        else 0.0
+    )
+    if m >= COUNTDOWN_MIN_SLOPE:
+        return None
+    return max(math.ceil(smoothed_value / -m), 0)
+
+
 AVERAGE_SONG_LENGTH = _compute_average_song_length()
 next_song_lookup_limit = _compute_next_song_lookup_limit()
-num_slots_in_window = next_song_lookup_limit * 0.09
-RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH
+num_slots_in_window = next_song_lookup_limit * 0.07
+COUNTDOWN_MAX_POINTS = num_slots_in_window * 2
+RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
 def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     """Get next song to play."""
-    logger.info(f'Ratings window is {RATINGS_WINDOW / 60:.0f} min')
+    logger.info(
+        f'Ratings window is {RATINGS_WINDOW / 60:.0f} min ({num_slots_in_window:.0f} slots)'
+    )
     max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
@@ -152,59 +170,61 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             sum(queue[name] for name in history_artist_names) / len(history_artist_names)
             - space_per_artist
         )
+        # too few unique artists and too many repeats queued are the same
+        # underlying symptom (an album add flooding the top of the priority
+        # queue with one artist) seen from two angles, so gate on whichever
+        # one hasn't recovered yet rather than tracking two countdowns
+        artist_gap = num_slots_in_window - unique_count
+        gate = max(upcoming, artist_gap)
+
         # smooth before storing: each song moves the raw average by a discrete
         # step, so the series zig-zags and a line fitted through it twitches.
         # an EMA damps the song-to-song jitter but still follows a real change
         countdown = cache.get('add_album_countdown', [])
         smoothed = (
-            COUNTDOWN_ALPHA * upcoming + (1 - COUNTDOWN_ALPHA) * countdown[-1]
-            if countdown
-            else upcoming
+            COUNTDOWN_ALPHA * gate + (1 - COUNTDOWN_ALPHA) * countdown[-1] if countdown else gate
         )
         # cap the history: too long a window keeps one big album add dominating
         # the slope long after the queue has moved past it
         countdown_window = min(int(num_slots_in_window * 2), COUNTDOWN_MAX_POINTS)
         countdown = (countdown + [smoothed])[-countdown_window:]
         cache.set('add_album_countdown', countdown, timeout=None)
-        logger.info(f'Countdown ({upcoming:.2f}): {", ".join(f"{x:.2f}" for x in countdown)}')
+        logger.info(
+            f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)} '
+            f'({unique_count}/{num_slots_in_window:.0f} artists)'
+        )
 
-        # if can add, first check if a new album was not already added in the last
-        # window timeframe
+        # a newly added album still needs its ratings window to elapse before
+        # another add is suggested; convert the remaining window time into an
+        # estimated song count so it reads the same as the queue-based countdown
         latest_created_at = Song.objects.latest('created_at').created_at
-        window_time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
+        window_time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW / 2)
+        time_buffer_steps = 0
         if latest_created_at > window_time_ago:
-            logger.info(f'{"." * 5} Add album: recently added')
+            seconds_since_added = (timezone.now() - latest_created_at).total_seconds()
+            seconds_remaining = RATINGS_WINDOW - seconds_since_added
+            time_buffer_steps = max(math.ceil(seconds_remaining / AVERAGE_SONG_LENGTH), 0)
 
-        # first fill up queue to see if artists has repeats lined up
-        elif unique_count < num_slots_in_window:
-            logger.info(f'{"." * 5} Add album: {unique_count}/{num_slots_in_window:.0f} artists')
-
-        # songs still to listen to before an album is due
-        elif upcoming > 0:
-            # queue has too many repeats per artist, listen it out
+        # gate on the smoothed value, not the raw one: the raw gate can dip
+        # to 0 for a single song while the EMA trend is still above it, which
+        # would fire "do it!" a beat too early
+        if smoothed > 0:
             # give countdown estimate: extrapolate the current value down at
             # the recent slope. fitting the whole history instead lets old
             # spikes steepen the line, and -b/m then ignores where we are now
-            # polyfit needs the guard first: on fewer than 3 points a degree-1
-            # fit is underdetermined and returns nan, which passes any
-            # comparison below and then blows up in math.ceil
-            m = (
-                np.polyfit(np.arange(len(countdown)), countdown, 1)[0]
-                if len(countdown) >= COUNTDOWN_MIN_POINTS
-                else 0.0
-            )
-            # need a real downward trend to extrapolate; a flat/near-zero
-            # slope makes the division blow up (and 2 equal points fit flat)
-            if m >= COUNTDOWN_MIN_SLOPE:
-                logger.info(f'{"." * 5} Add album: oo (q/a {upcoming:.2f})')
+            steps = _slope_steps_remaining(countdown, smoothed)
+            if steps is None:
+                logger.info(f'{"." * 5} Add album: oo')
             else:
-                # extrapolate from the smoothed value, not the raw one:
-                # the slope came off the EMA series, so mixing in the
-                # unsmoothed numerator puts the jitter straight back
-                steps_remaining = max(math.ceil(smoothed / -m), 0)
-                logger.info(
-                    f'{"." * 5} Add album: in ~{steps_remaining} songs (q/a {upcoming:.2f})'
-                )
+                # floor it against the recently-added time buffer so the
+                # estimate never undercuts the ratings window still in effect
+                steps_remaining = max(steps, time_buffer_steps)
+                logger.info(f'{"." * 5} Add album: in ~{steps_remaining} songs')
+
+        # countdown says "do it" but the ratings window buffer is still running
+        elif time_buffer_steps:
+            logger.info(f'{"." * 5} Add album: in ~{time_buffer_steps} songs')
+
         else:
             waterdrop_path = settings.SOUNDS_DIR / 'mixkit-water-bubble-1317.wav'
             sa.WaveObject.from_wave_file(str(waterdrop_path)).play()
