@@ -29,12 +29,20 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = [
+    "coverage",
     "pre-commit",
     "pytest",
+    "pytest-django",
 ]
 
 [tool.setuptools]
 packages = ["speler2"]
+
+
+[tool.pytest.ini_options]
+DJANGO_SETTINGS_MODULE = "speler2.settings"
+# the app keeps its tests in main/tests.py, which pytest does not collect by default
+python_files = ["tests.py", "test_*.py", "*_test.py"]
 
 [tool.ruff]
 # The minimum Python version to target, e.g., when considering automatic code upgrades,
@@ -131,6 +139,12 @@ dummy-variable-rgx = "^(_+|(_+[a-zA-Z0-9_]*[a-zA-Z0-9]+?))$"
 
 [tool.ruff.lint.pylint]
 max-args = 13
+
+
+[tool.ruff.lint.flake8-pytest-style]
+# the pinned pre-commit ruff (v0.3.0) defaults to requiring the parentheses while
+# newer ruff defaults to rejecting them; pin it so the two do not fight over the file
+fixture-parentheses = true
 
 
 [tool.ruff.lint.pydocstyle]

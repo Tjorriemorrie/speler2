@@ -27,6 +27,9 @@ MIN_SONGS_FOR_AVG = 100
 DEFAULT_AVG_SONG_LENGTH = 240.0
 MIN_LOOKUP_LIMIT = 50
 COUNTDOWN_MIN_POINTS = 4
+# a rating match needs the recent history to hold songs that have been played
+# before, so until the window has this many entries a brand new song is skipped
+MIN_HISTORY_FOR_NEW_SONGS = 4
 COUNTDOWN_MIN_SLOPE = -1e-6
 COUNTDOWN_ALPHA = 0.2
 
@@ -63,7 +66,9 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
 AVERAGE_SONG_LENGTH = _compute_average_song_length()
 next_song_lookup_limit = _compute_next_song_lookup_limit()
 num_slots_in_window = next_song_lookup_limit * 0.07
-COUNTDOWN_MAX_POINTS = num_slots_in_window * 2
+# one rotation's worth of history: long enough to see a trend, short enough that
+# a spike from an album add falls out of the slope fit once the queue moves past it
+COUNTDOWN_WINDOW = max(int(num_slots_in_window), COUNTDOWN_MIN_POINTS)
 RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
@@ -136,26 +141,33 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
 
     # Query once and store in memory (for rnd)
     songs = list(songs_with_priority.all()[:next_song_lookup_limit])
+
+    # an unplayed song has nothing to rate against, so while the history window is
+    # still filling up skip past them - unless every candidate is new, in which
+    # case there is nothing to skip to and the normal priority order stands
+    played_songs = [song for song in songs if song.count_played]
+    skip_new_songs = len(history_artists) < MIN_HISTORY_FOR_NEW_SONGS and bool(played_songs)
+    if skip_new_songs:
+        logger.info(
+            f'Skipping new songs: history={len(history_artists)}/{MIN_HISTORY_FOR_NEW_SONGS}, '
+            f'played_candidates={len(played_songs)}/{len(songs)}'
+        )
+
     next_song = None
     # Iterate over the songs and check if the artist was recently played
     for song in songs:
-        if not next_song:
-            if song.artist.name not in queue:
-                next_song = song
-                queue[song.artist.name] = 0
-                history_artist_names.add(song.artist.name)
-                # logger.info(f'Found next song {next_song}')
-            else:
-                queue[song.artist.name] += 1
-                # logger.info(f'Increased existing artist on queue {unidecode(song.artist.name)}')
-        elif song.artist.name in queue:
+        if song.artist.name in queue:
             queue[song.artist.name] += 1
-            # logger.info(f'Has next song, but increasing artist already
-            # in queue afterwards: {unidecode(song.artist.name)}')
+            # logger.info(f'Increased existing artist on queue {unidecode(song.artist.name)}')
+        elif not next_song and not (skip_new_songs and not song.count_played):
+            next_song = song
+            queue[song.artist.name] = 0
+            history_artist_names.add(song.artist.name)
+            # logger.info(f'Found next song {next_song}')
 
     # If no valid song is found, randomly select one from the top 100
     if not next_song and songs:
-        next_song = random.choice(songs)  # noqa: S311
+        next_song = random.choice(played_songs if skip_new_songs else songs)  # noqa: S311
         cowbell_path = settings.SOUNDS_DIR / 'mixkit-cowbell-sharp-hit-1743.wav'
         sa.WaveObject.from_wave_file(str(cowbell_path)).play()
         logger.info(
@@ -165,10 +177,13 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     elif next_song:
         space_per_artist = 3
         unique_count = len(history_artist_names)
-        # get top queued artist counts for slot size
+        # median, not mean: a freshly added album puts a dozen-plus of its songs
+        # near the top of the priority queue, and one such artist drags the mean
+        # far enough up to hold the gate open indefinitely. the median reads what
+        # we actually want, the backlog of a typical artist in rotation. the
+        # "an album was just added" signal is time_buffer_steps' job, below
         upcoming = (
-            sum(queue[name] for name in history_artist_names) / len(history_artist_names)
-            - space_per_artist
+            float(np.median([queue[name] for name in history_artist_names])) - space_per_artist
         )
         # too few unique artists and too many repeats queued are the same
         # underlying symptom (an album add flooding the top of the priority
@@ -184,10 +199,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         smoothed = (
             COUNTDOWN_ALPHA * gate + (1 - COUNTDOWN_ALPHA) * countdown[-1] if countdown else gate
         )
-        # cap the history: too long a window keeps one big album add dominating
-        # the slope long after the queue has moved past it
-        countdown_window = min(int(num_slots_in_window * 2), COUNTDOWN_MAX_POINTS)
-        countdown = (countdown + [smoothed])[-countdown_window:]
+        countdown = (countdown + [smoothed])[-COUNTDOWN_WINDOW:]
         cache.set('add_album_countdown', countdown, timeout=None)
         logger.info(
             f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)} '
@@ -210,8 +222,10 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         # would fire "do it!" a beat too early
         if smoothed > 0:
             # give countdown estimate: extrapolate the current value down at
-            # the recent slope. fitting the whole history instead lets old
-            # spikes steepen the line, and -b/m then ignores where we are now
+            # the recent slope. the stored history is capped at one rotation so
+            # the slope is local to the same stretch the level came from --
+            # fitting a longer decay curve gives a slope from its steep early
+            # part and a level from its flat tail, which reads far too optimistic
             steps = _slope_steps_remaining(countdown, smoothed)
             if steps is None:
                 logger.info(f'{"." * 5} Add album: oo')
