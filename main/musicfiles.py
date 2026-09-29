@@ -240,7 +240,7 @@ def get_flac_metadata(file_path) -> dict:
     return info
 
 
-def validate_songs(delete: bool = True) -> List[Song]:
+def validate_songs(*args, delete: bool = True, **kwargs) -> List[Song]:
     """Ensure songs in db has files."""
     logger.info('Validating songs...')
     listing = []
@@ -268,6 +268,9 @@ def validate_songs(delete: bool = True) -> List[Song]:
                 logger.info(f'Removing artist {artist} with no albums')
                 artist.delete()
 
+    logger.info(
+        f'🧹 Validated songs: songs_checked={len(songs)} missing={len(listing)} delete={delete}'
+    )
     return listing
 
 

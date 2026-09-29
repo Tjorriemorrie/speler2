@@ -4,6 +4,7 @@ from unittest.mock import patch
 import pytest
 from bs4 import BeautifulSoup
 from django.core.cache import cache
+from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
@@ -706,3 +707,8 @@ def test_next_rating_missing_song_returns_message(client, db):
     response = client.get(reverse('next_rating'))
 
     assert response.content.startswith(b'<p>Song not found')
+
+
+def test_parsemusic_validate_accepts_command_options(db):
+    """The validate sub-command runs with the options Django passes to every command."""
+    call_command('parsemusic', 'validate', '--no-delete')
