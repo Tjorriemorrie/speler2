@@ -127,11 +127,20 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
 
 def next_rating_view(request: WSGIRequest):
     """Return next rating."""
-    if winner_id := request.GET.get('winner_id'):
-        match_ids = request.session.get('match_ids')
-        set_match_result(int(winner_id), list(map(int, match_ids)))
+    winner_id = request.GET.get('winner_id')
+    song_id = request.session.get('song_id')
+    try:
+        if winner_id:
+            match_ids = request.session.get('match_ids')
+            set_match_result(int(winner_id), list(map(int, match_ids)))
+        current_song = Song.objects.get(id=song_id)
+    except Song.DoesNotExist as exc:
+        logger.warning(
+            f'⚠️ Next rating: song not found: song_id={song_id}, winner_id={winner_id}, '
+            f'error={exc}'
+        )
+        return HttpResponse(f'<p>Song not found: {exc}</p>')
 
-    current_song = Song.objects.get(id=request.session.get('song_id'))
     match = get_match(current_song)
     request.session['match_ids'] = [s.id for s in match] if match else None
 
@@ -141,6 +150,7 @@ def next_rating_view(request: WSGIRequest):
         # Set the HX-Trigger header to reload album view with ratings on it
         response['HX-Trigger'] = 'refreshAlbum'
 
+    logger.info(f'⚖️ Next rating: song_id={song_id}, match_count={len(match) if match else 0}')
     return response
 
 

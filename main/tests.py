@@ -692,3 +692,17 @@ def test_post_keeps_db_unchanged_when_file_write_fails(
     assert editable_song.name == 'Bad Title [HQ]'
     assert 'file is locked' in content
     assert 'value="Good Title"' in content
+
+
+# next_rating_view
+
+
+def test_next_rating_missing_song_returns_message(client, db):
+    """A session pointing at a deleted song renders a message instead of a 500."""
+    session = client.session
+    session['song_id'] = 999999
+    session.save()
+
+    response = client.get(reverse('next_rating'))
+
+    assert response.content.startswith(b'<p>Song not found')
