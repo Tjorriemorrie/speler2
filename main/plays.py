@@ -69,6 +69,8 @@ num_slots_in_window = next_song_lookup_limit * 0.07
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
 COUNTDOWN_WINDOW = 9
+# while the trend is rising the history shrinks towards this, never below it
+COUNTDOWN_MIN_WINDOW = 5
 RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
@@ -203,7 +205,14 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         smoothed = (
             COUNTDOWN_ALPHA * gate + (1 - COUNTDOWN_ALPHA) * countdown[-1] if countdown else gate
         )
-        countdown = (countdown + [smoothed])[-COUNTDOWN_WINDOW:]
+        countdown = countdown + [smoothed]
+        steps = _slope_steps_remaining(countdown, smoothed) if smoothed > 0 else 0
+        if steps is None:
+            # rising trend: shrink the history by one so the points from before
+            # the rise drop out of the slope fit faster than they came in
+            countdown = countdown[-max(len(countdown) - 2, COUNTDOWN_MIN_WINDOW) :]
+        else:
+            countdown = countdown[-COUNTDOWN_WINDOW:]
         cache.set('add_album_countdown', countdown, timeout=None)
         logger.info(f'Countdown: {", ".join(f"{x:.1f}" for x in countdown)}')
 
@@ -227,7 +236,6 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             # the slope is local to the same stretch the level came from --
             # fitting a longer decay curve gives a slope from its steep early
             # part and a level from its flat tail, which reads far too optimistic
-            steps = _slope_steps_remaining(countdown, smoothed)
             if steps is None:
                 logger.info(f'{"." * 5} Add album: oo')
             else:

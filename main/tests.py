@@ -367,6 +367,26 @@ def test_countdown_extrapolates_from_two_points():
     assert _slope_steps_remaining([0.5, 0.4], 0.4) == 4
 
 
+@patch('main.plays.num_slots_in_window', 10)
+def test_countdown_shrinks_while_rising(catalog):
+    """An unbounded estimate drops one point more than it adds."""
+    cache.set('add_album_countdown', [0.1] * 9, timeout=None)
+
+    get_next_song()
+
+    assert len(cache.get('add_album_countdown')) == 8
+
+
+@patch('main.plays.num_slots_in_window', 10)
+def test_countdown_grows_while_falling(catalog):
+    """A falling estimate keeps every point and adds the new one."""
+    cache.set('add_album_countdown', [20.0] * 6, timeout=None)
+
+    get_next_song()
+
+    assert len(cache.get('add_album_countdown')) == 7
+
+
 # percentile based rank property
 
 
