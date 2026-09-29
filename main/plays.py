@@ -26,10 +26,10 @@ logger = logging.getLogger(__name__)
 MIN_SONGS_FOR_AVG = 100
 DEFAULT_AVG_SONG_LENGTH = 240.0
 MIN_LOOKUP_LIMIT = 50
-COUNTDOWN_MIN_POINTS = 4
-# a rating match needs the recent history to hold songs that have been played
-# before, so until the window has this many entries a brand new song is skipped
-MIN_HISTORY_FOR_NEW_SONGS = 4
+COUNTDOWN_MIN_POINTS = 2
+# a rating match needs the ratings window to hold songs that have been played
+# before, so until the window has this many plays a brand new song is skipped
+MIN_HISTORY_FOR_NEW_SONGS = 2
 COUNTDOWN_MIN_SLOPE = -1e-6
 COUNTDOWN_ALPHA = 0.2
 
@@ -68,15 +68,12 @@ next_song_lookup_limit = _compute_next_song_lookup_limit()
 num_slots_in_window = next_song_lookup_limit * 0.07
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
-COUNTDOWN_WINDOW = max(int(num_slots_in_window), COUNTDOWN_MIN_POINTS)
+COUNTDOWN_WINDOW = 9
 RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
 def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     """Get next song to play."""
-    logger.info(
-        f'Ratings window is {RATINGS_WINDOW / 60:.0f} min ({num_slots_in_window:.0f} slots)'
-    )
     max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
@@ -142,14 +139,19 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     # Query once and store in memory (for rnd)
     songs = list(songs_with_priority.all()[:next_song_lookup_limit])
 
-    # an unplayed song has nothing to rate against, so while the history window is
-    # still filling up skip past them - unless every candidate is new, in which
-    # case there is nothing to skip to and the normal priority order stands
+    # an unplayed song is rated against the plays in the ratings window, so until
+    # that window holds enough of them skip past new songs - unless every candidate
+    # is new, in which case there is nothing to skip to and the normal priority
+    # order stands. counted directly: history_artists falls back to older plays
+    # when the window is short, so its length never reflects the window itself
+    window_plays = History.objects.filter(
+        played_at__gte=timezone.now() - timedelta(seconds=RATINGS_WINDOW)
+    ).count()
     played_songs = [song for song in songs if song.count_played]
-    skip_new_songs = len(history_artists) < MIN_HISTORY_FOR_NEW_SONGS and bool(played_songs)
+    skip_new_songs = window_plays < MIN_HISTORY_FOR_NEW_SONGS and bool(played_songs)
     if skip_new_songs:
         logger.info(
-            f'Skipping new songs: history={len(history_artists)}/{MIN_HISTORY_FOR_NEW_SONGS}, '
+            f'⏭️ Skipping new songs: window_plays={window_plays}/{MIN_HISTORY_FOR_NEW_SONGS}, '
             f'played_candidates={len(played_songs)}/{len(songs)}'
         )
 
@@ -182,14 +184,11 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     elif next_song:
         space_per_artist = 3
         unique_count = len(history_artist_names)
-        # median, not mean: a freshly added album puts a dozen-plus of its songs
-        # near the top of the priority queue, and one such artist drags the mean
-        # far enough up to hold the gate open indefinitely. the median reads what
-        # we actually want, the backlog of a typical artist in rotation. the
-        # "an album was just added" signal is time_buffer_steps' job, below
-        upcoming = (
-            float(np.median([queue[name] for name in history_artist_names])) - space_per_artist
-        )
+        # mean backlog per artist in rotation: with the history loaded on start
+        # the window is never empty, so an album's flood of queued songs is
+        # diluted across a full set of artists instead of dominating a few
+        backlog = sum(queue[name] for name in history_artist_names)
+        upcoming = backlog / unique_count - space_per_artist
         # too few unique artists and too many repeats queued are the same
         # underlying symptom (an album add flooding the top of the priority
         # queue with one artist) seen from two angles, so gate on whichever
@@ -206,10 +205,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         )
         countdown = (countdown + [smoothed])[-COUNTDOWN_WINDOW:]
         cache.set('add_album_countdown', countdown, timeout=None)
-        logger.info(
-            f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)} '
-            f'({unique_count}/{num_slots_in_window:.0f} artists)'
-        )
+        logger.info(f'Countdown: {", ".join(f"{x:.1f}" for x in countdown)}')
 
         # a newly added album still needs its ratings window to elapse before
         # another add is suggested; convert the remaining window time into an
@@ -249,6 +245,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             sa.WaveObject.from_wave_file(str(waterdrop_path)).play()
             logger.info(f'{"+" * 5} Add album: do it!')
     if not next_song:
+        logger.error(f'❌ No next song found: candidates={len(songs)}')
         raise ValueError('Expected to get a song, but found nothing')
 
     for name, cnt in queue.items():

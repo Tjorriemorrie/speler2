@@ -9,7 +9,8 @@ from django.utils import timezone
 
 from main.lastfm_service import extract_albums_from_table
 from main.models import Album, Artist, History, Similar, Song
-from main.plays import MIN_HISTORY_FOR_NEW_SONGS, get_next_song
+from main.plays import MIN_HISTORY_FOR_NEW_SONGS, _slope_steps_remaining, get_next_song
+from main.selectors import get_recent_artists
 from main.views import similars_bad_artists, similars_remove_artist
 
 
@@ -294,13 +295,25 @@ def test_picks_new_song_when_all_candidates_are_new(catalog):
     assert get_next_song() == catalog['new']
 
 
+@patch('main.plays.num_slots_in_window', 2)
 @patch('main.plays.sa')
 def test_falls_back_to_a_played_song_when_every_artist_is_queued(mock_sa, catalog):
     """The random fallback stays on played songs while new ones are skipped."""
     _play(catalog['played'], 1)
-    _play(catalog['history'], 1)
+    History.objects.create(song=catalog['history'], played_at=timezone.now() - timedelta(days=1))
 
     assert get_next_song() in (catalog['played'], catalog['history'])
+
+
+@patch('main.plays.num_slots_in_window', MIN_HISTORY_FOR_NEW_SONGS)
+def test_skips_new_songs_when_history_is_only_outside_the_window(catalog):
+    """Older plays filling the recent history do not count towards the window."""
+    for days_ago in range(1, MIN_HISTORY_FOR_NEW_SONGS + 1):
+        History.objects.create(
+            song=catalog['history'], played_at=timezone.now() - timedelta(days=days_ago)
+        )
+
+    assert get_next_song() == catalog['played']
 
 
 def test_skipped_new_songs_count_towards_next_artist_queue(catalog, caplog):
@@ -329,6 +342,29 @@ def test_picks_new_song_once_history_is_long_enough(catalog):
     _play(catalog['history'], MIN_HISTORY_FOR_NEW_SONGS)
 
     assert get_next_song() == catalog['new']
+
+
+@patch('main.plays.num_slots_in_window', 2)
+def test_recent_artists_falls_back_to_latest_plays(catalog):
+    """With the window empty, the latest slot-count plays are still returned."""
+    History.objects.create(song=catalog['history'], played_at=timezone.now() - timedelta(days=1))
+    History.objects.create(song=catalog['played'], played_at=timezone.now() - timedelta(days=2))
+    History.objects.create(song=catalog['played'], played_at=timezone.now() - timedelta(days=3))
+
+    assert [h.song for h in get_recent_artists()] == [catalog['history'], catalog['played']]
+
+
+@patch('main.plays.num_slots_in_window', 1)
+def test_recent_artists_uses_window_when_it_holds_enough(catalog):
+    """A window holding at least the slot count returns every play in it."""
+    _play(catalog['history'], 3)
+
+    assert get_recent_artists().count() == 3
+
+
+def test_countdown_extrapolates_from_two_points():
+    """Two falling points are enough to fit a line down to zero."""
+    assert _slope_steps_remaining([0.5, 0.4], 0.4) == 4
 
 
 # percentile based rank property
