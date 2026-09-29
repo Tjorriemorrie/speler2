@@ -303,6 +303,27 @@ def test_falls_back_to_a_played_song_when_every_artist_is_queued(mock_sa, catalo
     assert get_next_song() in (catalog['played'], catalog['history'])
 
 
+def test_skipped_new_songs_count_towards_next_artist_queue(catalog, caplog):
+    """New songs skipped ahead of the picked artist still show as queued for it."""
+    played = catalog['played']
+    Song.objects.create(
+        album=played.album,
+        artist=played.artist,
+        rel_path='played-2.mp3',
+        slug='played-2',
+        name='played-2',
+        disc_number=1,
+        track_number=2,
+        track_length=240.0,
+    )
+    _play(catalog['history'], 1)
+
+    with caplog.at_level('INFO', logger='main.plays'):
+        get_next_song()
+
+    assert '>>>>> played +' in caplog.messages
+
+
 def test_picks_new_song_once_history_is_long_enough(catalog):
     """Once the window holds enough plays to rate, new songs are eligible again."""
     _play(catalog['history'], MIN_HISTORY_FOR_NEW_SONGS)

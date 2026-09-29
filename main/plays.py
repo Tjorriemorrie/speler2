@@ -154,14 +154,19 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         )
 
     next_song = None
+    # new songs skipped before their artist joins the queue are still pending
+    # plays, so tally them to credit the artist once it does
+    skipped_new = defaultdict(int)
     # Iterate over the songs and check if the artist was recently played
     for song in songs:
         if song.artist.name in queue:
             queue[song.artist.name] += 1
             # logger.info(f'Increased existing artist on queue {unidecode(song.artist.name)}')
-        elif not next_song and not (skip_new_songs and not song.count_played):
+        elif skip_new_songs and not song.count_played:
+            skipped_new[song.artist.name] += 1
+        elif not next_song:
             next_song = song
-            queue[song.artist.name] = 0
+            queue[song.artist.name] = skipped_new[song.artist.name]
             history_artist_names.add(song.artist.name)
             # logger.info(f'Found next song {next_song}')
 
