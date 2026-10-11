@@ -3,7 +3,7 @@ from unittest.mock import patch
 
 import pytest
 from bs4 import BeautifulSoup
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
@@ -16,11 +16,21 @@ from main.views import similars_bad_artists, similars_remove_artist
 
 
 @pytest.fixture(autouse=True)
-def _clear_cache():
+def _clear_cache(settings):
     """Keep cached querysets, ranks and priority values from leaking between tests."""
+    # never let a test touch the countdown persisted on disk
+    settings.CACHES = {
+        **settings.CACHES,
+        'persistent': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'tests',
+        },
+    }
     cache.clear()
+    caches['persistent'].clear()
     yield
     cache.clear()
+    caches['persistent'].clear()
 
 
 # similars_bad_artists view
@@ -371,21 +381,21 @@ def test_countdown_extrapolates_from_two_points():
 @patch('main.plays.num_slots_in_window', 10)
 def test_countdown_shrinks_while_rising(catalog):
     """An unbounded estimate drops one point more than it adds."""
-    cache.set('add_album_countdown', [0.1] * 9, timeout=None)
+    caches['persistent'].set('add_album_countdown', [0.1] * 9, timeout=None)
 
     get_next_song()
 
-    assert len(cache.get('add_album_countdown')) == 8
+    assert len(caches['persistent'].get('add_album_countdown')) == 8
 
 
 @patch('main.plays.num_slots_in_window', 10)
 def test_countdown_grows_while_falling(catalog):
     """A falling estimate keeps every point and adds the new one."""
-    cache.set('add_album_countdown', [20.0] * 6, timeout=None)
+    caches['persistent'].set('add_album_countdown', [20.0] * 6, timeout=None)
 
     get_next_song()
 
-    assert len(cache.get('add_album_countdown')) == 7
+    assert len(caches['persistent'].get('add_album_countdown')) == 7
 
 
 # percentile based rank property

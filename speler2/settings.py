@@ -211,7 +211,12 @@ LOGGING = {
 CACHES = {
     'default': {
         'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
-    }
+    },
+    # survives server restarts, for state that has to keep building across runs
+    'persistent': {
+        'BACKEND': 'django.core.cache.backends.filebased.FileBasedCache',
+        'LOCATION': BASE_DIR / '.cache' / 'persistent',
+    },
 }
 
 

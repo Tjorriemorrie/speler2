@@ -87,3 +87,11 @@ without requiring the user to repeat the information later.
   `recheck_metadata` re-reads it and overwrites the db — so ui edits write the tag first via
   `musicfiles.write_song_title`, then save the model. Any future field made editable must keep
   that file-then-db order, otherwise a failed write silently desyncs the two.
+
+## Caching
+
+- `default` is LocMem and is wiped on every restart - fine for querysets, graphs and filters.
+- `caches['persistent']` is a `FileBasedCache` under `.cache/persistent` (gitignored) for state
+  that has to keep building across restarts, currently only `add_album_countdown`. Put a key there
+  only if losing it on restart is actually wrong. The autouse fixture in `main/tests.py` swaps it for
+  LocMem so tests never touch the real file.

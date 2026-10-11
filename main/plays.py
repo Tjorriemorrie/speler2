@@ -8,7 +8,7 @@ from typing import Tuple, Union
 import numpy as np
 import simpleaudio as sa
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import cache, caches
 from django.db import connection
 from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Value
 from django.db.models.expressions import Case, Func, RawSQL, When
@@ -31,7 +31,7 @@ COUNTDOWN_MIN_POINTS = 2
 # before, so until the window has this many plays a brand new song is skipped
 MIN_HISTORY_FOR_NEW_SONGS = 2
 COUNTDOWN_MIN_SLOPE = -1e-6
-COUNTDOWN_ALPHA = 0.2
+COUNTDOWN_ALPHA = 0.1
 
 
 def _compute_average_song_length() -> float:
@@ -68,9 +68,9 @@ next_song_lookup_limit = _compute_next_song_lookup_limit()
 num_slots_in_window = next_song_lookup_limit * 0.07
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
-COUNTDOWN_WINDOW = 9
+COUNTDOWN_WINDOW = 7
 # while the trend is rising the history shrinks towards this, never below it
-COUNTDOWN_MIN_WINDOW = 5
+COUNTDOWN_MIN_WINDOW = 3
 RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
@@ -201,7 +201,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         # smooth before storing: each song moves the raw average by a discrete
         # step, so the series zig-zags and a line fitted through it twitches.
         # an EMA damps the song-to-song jitter but still follows a real change
-        countdown = cache.get('add_album_countdown', [])
+        countdown = caches['persistent'].get('add_album_countdown', [])
         smoothed = (
             COUNTDOWN_ALPHA * gate + (1 - COUNTDOWN_ALPHA) * countdown[-1] if countdown else gate
         )
@@ -213,8 +213,8 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             countdown = countdown[-max(len(countdown) - 2, COUNTDOWN_MIN_WINDOW) :]
         else:
             countdown = countdown[-COUNTDOWN_WINDOW:]
-        cache.set('add_album_countdown', countdown, timeout=None)
-        logger.info(f'Countdown: {", ".join(f"{x:.1f}" for x in countdown)}')
+        caches['persistent'].set('add_album_countdown', countdown, timeout=None)
+        logger.info(f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)}')
 
         # a newly added album still needs its ratings window to elapse before
         # another add is suggested; convert the remaining window time into an
