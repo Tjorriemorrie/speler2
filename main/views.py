@@ -130,8 +130,13 @@ def next_rating_view(request: WSGIRequest):
     winner_id = request.GET.get('winner_id')
     song_id = request.session.get('song_id')
     try:
-        if winner_id:
-            match_ids = request.session.get('match_ids')
+        match_ids = request.session.get('match_ids')
+        if winner_id and not match_ids:
+            logger.warning(
+                f'⚠️ Next rating: no match in session, ignoring winner: '
+                f'song_id={song_id}, winner_id={winner_id}'
+            )
+        elif winner_id:
             set_match_result(int(winner_id), list(map(int, match_ids)))
         current_song = Song.objects.get(id=song_id)
     except Song.DoesNotExist as exc:

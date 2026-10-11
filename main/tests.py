@@ -719,6 +719,20 @@ def test_next_rating_missing_song_returns_message(client, db):
     assert response.content.startswith(b'<p>Song not found')
 
 
+@patch('main.views.set_match_result', autospec=True)
+def test_next_rating_winner_without_match_is_ignored(mock_set, client, editable_song):
+    """A winner click after the matches ran out records nothing instead of crashing."""
+    session = client.session
+    session['song_id'] = editable_song.id
+    session['match_ids'] = None
+    session.save()
+
+    response = client.get(reverse('next_rating'), {'winner_id': editable_song.id})
+
+    assert response.status_code == 200
+    mock_set.assert_not_called()
+
+
 def test_parsemusic_validate_accepts_command_options(db):
     """The validate sub-command runs with the options Django passes to every command."""
     call_command('parsemusic', 'validate', '--no-delete')
