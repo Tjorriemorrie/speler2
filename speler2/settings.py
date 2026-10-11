@@ -55,8 +55,6 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    # 'django_extensions',
-    # 'sslserver',
     'crispy_forms',
     'crispy_bootstrap5',
     'django_tables2',
@@ -102,7 +100,7 @@ WSGI_APPLICATION = 'speler2.wsgi.application'
 DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
+        'NAME': env.path('DB_PATH', default=BASE_DIR / 'db.sqlite3'),
     }
 }
 

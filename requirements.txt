@@ -6,8 +6,6 @@ django==5.1.1
 django-crispy-forms==2.3
 django_filter==24.3
 django_tables2==2.7.0
-# django-extensions==3.2.3
-# django-sslserver==0.22
 environs==11.0.0
 huggingface_hub==0.26.2
 mutagen==1.47.0
