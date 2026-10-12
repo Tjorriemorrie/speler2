@@ -4,7 +4,8 @@
         <a id="rating-box-{{ forloop.counter }}" class="text-reset text-decoration-none" href="#"
            hx-get="{% url 'next_rating' %}?winner_id={{ song.id }}"
            hx-target="#rating-container"
-           hx-swap="innerHTML">
+           hx-swap="innerHTML"
+           hx-indicator="#rating-loader">
             <div class="card compact-card">
                 <div class="card-body">
                     <h5 class="card-title title-font ellipsis">{{ song.name }}</h5>
