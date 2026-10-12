@@ -186,11 +186,16 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
     elif next_song:
         space_per_artist = 3
         unique_count = len(history_artist_names)
-        # mean backlog per artist in rotation: with the history loaded on start
-        # the window is never empty, so an album's flood of queued songs is
-        # diluted across a full set of artists instead of dominating a few
-        backlog = sum(queue[name] for name in history_artist_names)
-        upcoming = backlog / unique_count - space_per_artist
+        # mean backlog over the slot count's highest queued artists: a window
+        # holding more artists than slots would otherwise dilute an album's
+        # flood of queued songs across artists that have nothing queued
+        slots = round(num_slots_in_window)
+        top_counts = sorted((queue[name] for name in history_artist_names), reverse=True)[:slots]
+        upcoming = sum(top_counts) / len(top_counts) - space_per_artist
+        logger.info(
+            f'⏳ Countdown backlog: artists={unique_count}, slots={slots}, '
+            f'used={len(top_counts)}, backlog={sum(top_counts)}, upcoming={upcoming:.2f}'
+        )
         # too few unique artists and too many repeats queued are the same
         # underlying symptom (an album add flooding the top of the priority
         # queue with one artist) seen from two angles, so gate on whichever

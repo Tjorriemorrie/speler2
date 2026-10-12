@@ -388,6 +388,18 @@ def test_countdown_shrinks_while_rising(catalog):
     assert len(caches['persistent'].get('add_album_countdown')) == 8
 
 
+@patch('main.plays.num_slots_in_window', 1)
+def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
+    """A window holding more artists than slots averages only the top queue counts."""
+    _play(catalog['history'], 1)
+    _play(catalog['other_new'], 1)
+
+    with caplog.at_level('INFO', logger='main.plays'):
+        get_next_song()
+
+    assert any('used=1, backlog=1,' in m for m in caplog.messages)
+
+
 @patch('main.plays.num_slots_in_window', 10)
 def test_countdown_grows_while_falling(catalog):
     """A falling estimate keeps every point and adds the new one."""
