@@ -27,9 +27,6 @@ without requiring the user to repeat the information later.
 - **pytest style, no `TestCase` classes.** Tests are plain module level functions; shared setup is
   a `@pytest.fixture`, not `setUp`. Take `db` (directly or through a fixture that creates rows) for
   database access, and `rf` / `client` for requests. Use bare `assert`, never `self.assertX`.
-- `conftest.py` unblocks the database for the collection phase because `main.plays` sizes its
-  rotation constants off the library at import time; without it importing `main/tests.py` is a
-  collection error.
 - Write the **minimum** tests and assertions that take new or changed code to **90% coverage**:
   one test per meaningful branch, one assertion per fact. No permutations of the same path, no
   assertions that restate what another assertion already proved, no tests for code you did not

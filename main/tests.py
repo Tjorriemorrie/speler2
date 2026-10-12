@@ -298,7 +298,7 @@ def test_skips_new_songs_while_history_is_short(catalog):
     assert get_next_song() == catalog['played']
 
 
-@patch('main.plays.next_song_lookup_limit', 2)
+@patch('main.plays.NEXT_SONG_LOOKUP_LIMIT', 2)
 def test_picks_new_song_when_all_candidates_are_new(catalog):
     """With nothing played to skip to, the top priority song wins as usual."""
     _play(catalog['history'], 1)
@@ -306,7 +306,7 @@ def test_picks_new_song_when_all_candidates_are_new(catalog):
     assert get_next_song() == catalog['new']
 
 
-@patch('main.plays.num_slots_in_window', 2)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 2)
 @patch('main.plays.sa')
 def test_falls_back_to_a_played_song_when_every_artist_is_queued(mock_sa, catalog):
     """The random fallback stays on played songs while new ones are skipped."""
@@ -316,7 +316,7 @@ def test_falls_back_to_a_played_song_when_every_artist_is_queued(mock_sa, catalo
     assert get_next_song() in (catalog['played'], catalog['history'])
 
 
-@patch('main.plays.num_slots_in_window', MIN_HISTORY_FOR_NEW_SONGS)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', MIN_HISTORY_FOR_NEW_SONGS)
 def test_skips_new_songs_when_history_is_only_outside_the_window(catalog):
     """Older plays filling the recent history do not count towards the window."""
     for days_ago in range(1, MIN_HISTORY_FOR_NEW_SONGS + 1):
@@ -355,7 +355,7 @@ def test_picks_new_song_once_history_is_long_enough(catalog):
     assert get_next_song() == catalog['new']
 
 
-@patch('main.plays.num_slots_in_window', 2)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 2)
 def test_recent_artists_falls_back_to_latest_plays(catalog):
     """With the window empty, the latest slot-count plays are still returned."""
     History.objects.create(song=catalog['history'], played_at=timezone.now() - timedelta(days=1))
@@ -365,7 +365,7 @@ def test_recent_artists_falls_back_to_latest_plays(catalog):
     assert [h.song for h in get_recent_artists()] == [catalog['history'], catalog['played']]
 
 
-@patch('main.plays.num_slots_in_window', 1)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 1)
 def test_recent_artists_uses_window_when_it_holds_enough(catalog):
     """A window holding at least the slot count returns every play in it."""
     _play(catalog['history'], 3)
@@ -378,7 +378,7 @@ def test_countdown_extrapolates_from_two_points():
     assert _slope_steps_remaining([0.5, 0.4], 0.4) == 4
 
 
-@patch('main.plays.num_slots_in_window', 10)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
 def test_countdown_shrinks_while_rising(catalog):
     """An unbounded estimate drops one point more than it adds."""
     caches['persistent'].set('add_album_countdown', [0.1] * 9, timeout=None)
@@ -388,7 +388,7 @@ def test_countdown_shrinks_while_rising(catalog):
     assert len(caches['persistent'].get('add_album_countdown')) == 8
 
 
-@patch('main.plays.num_slots_in_window', 1)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 1)
 def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     """A window holding more artists than slots averages only the top queue counts."""
     _play(catalog['history'], 1)
@@ -400,7 +400,7 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     assert any('used=1, backlog=1,' in m for m in caplog.messages)
 
 
-@patch('main.plays.num_slots_in_window', 10)
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
 def test_countdown_grows_while_falling(catalog):
     """A falling estimate keeps every point and adds the new one."""
     caches['persistent'].set('add_album_countdown', [20.0] * 6, timeout=None)

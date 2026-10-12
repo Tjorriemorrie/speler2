@@ -218,10 +218,10 @@ def get_recent_artists() -> QuerySet[History]:
     After a restart the window can be empty, so fall back to the latest plays to keep the
     queue and countdown fed with at least one window's worth of history.
     """
-    from main.plays import RATINGS_WINDOW, num_slots_in_window  # noqa: PLC0415  circular import
+    from main.plays import NUM_SLOTS_IN_WINDOW, RATINGS_WINDOW  # noqa: PLC0415  circular import
 
     time_threshold = timezone.now() - timezone.timedelta(seconds=RATINGS_WINDOW)
-    min_count = round(num_slots_in_window)
+    min_count = round(NUM_SLOTS_IN_WINDOW)
 
     # Query the History model for songs played in the time window
     recent_histories = History.objects.filter(played_at__gte=time_threshold)

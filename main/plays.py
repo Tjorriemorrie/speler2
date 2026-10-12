@@ -23,28 +23,16 @@ from main.selectors import get_recent_artists
 
 logger = logging.getLogger(__name__)
 
-MIN_SONGS_FOR_AVG = 100
-DEFAULT_AVG_SONG_LENGTH = 240.0
-MIN_LOOKUP_LIMIT = 50
+SONG_LENGTH = 4 * 60
+RATINGS_WINDOW = 30 * 60
+NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
+NEXT_SONG_LOOKUP_LIMIT = 100
 COUNTDOWN_MIN_POINTS = 2
 # a rating match needs the ratings window to hold songs that have been played
 # before, so until the window has this many plays a brand new song is skipped
 MIN_HISTORY_FOR_NEW_SONGS = 2
 COUNTDOWN_MIN_SLOPE = -1e-6
 COUNTDOWN_ALPHA = 0.1
-
-
-def _compute_average_song_length() -> float:
-    song_count = Song.objects.count()
-    if song_count < MIN_SONGS_FOR_AVG:
-        return DEFAULT_AVG_SONG_LENGTH
-    avg_length = Song.objects.aggregate(avg=Avg('track_length'))['avg']
-    return float(avg_length) if avg_length else DEFAULT_AVG_SONG_LENGTH
-
-
-def _compute_next_song_lookup_limit() -> int:
-    artist_count = Artist.objects.count()
-    return max(artist_count, MIN_LOOKUP_LIMIT)
 
 
 def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, None]:
@@ -63,15 +51,11 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
     return max(math.ceil(smoothed_value / -m), 0)
 
 
-AVERAGE_SONG_LENGTH = _compute_average_song_length()
-next_song_lookup_limit = _compute_next_song_lookup_limit()
-num_slots_in_window = next_song_lookup_limit * 0.07
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
 COUNTDOWN_WINDOW = 7
 # while the trend is rising the history shrinks towards this, never below it
 COUNTDOWN_MIN_WINDOW = 3
-RATINGS_WINDOW = num_slots_in_window * AVERAGE_SONG_LENGTH * 1.1
 
 
 def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
@@ -139,7 +123,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         history_artist_names.add(history_artist.song.artist.name)
 
     # Query once and store in memory (for rnd)
-    songs = list(songs_with_priority.all()[:next_song_lookup_limit])
+    songs = list(songs_with_priority.all()[:NEXT_SONG_LOOKUP_LIMIT])
 
     # an unplayed song is rated against the plays in the ratings window, so until
     # that window holds enough of them skip past new songs - unless every candidate
@@ -181,7 +165,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         sa.WaveObject.from_wave_file(str(cowbell_path)).play()
         logger.info(
             f'{"!" * 5} Could not find any unplayed artist in first '
-            f'{next_song_lookup_limit} priority queue!'
+            f'{NEXT_SONG_LOOKUP_LIMIT} priority queue!'
         )
     elif next_song:
         space_per_artist = 3
@@ -189,7 +173,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         # mean backlog over the slot count's highest queued artists: a window
         # holding more artists than slots would otherwise dilute an album's
         # flood of queued songs across artists that have nothing queued
-        slots = round(num_slots_in_window)
+        slots = round(NUM_SLOTS_IN_WINDOW)
         top_counts = sorted((queue[name] for name in history_artist_names), reverse=True)[:slots]
         upcoming = sum(top_counts) / len(top_counts) - space_per_artist
         logger.info(
@@ -200,7 +184,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         # underlying symptom (an album add flooding the top of the priority
         # queue with one artist) seen from two angles, so gate on whichever
         # one hasn't recovered yet rather than tracking two countdowns
-        artist_gap = num_slots_in_window - unique_count
+        artist_gap = NUM_SLOTS_IN_WINDOW - unique_count
         gate = max(upcoming, artist_gap)
 
         # smooth before storing: each song moves the raw average by a discrete
@@ -230,7 +214,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         if latest_created_at > window_time_ago:
             seconds_since_added = (timezone.now() - latest_created_at).total_seconds()
             seconds_remaining = RATINGS_WINDOW - seconds_since_added
-            time_buffer_steps = max(math.ceil(seconds_remaining / AVERAGE_SONG_LENGTH), 0)
+            time_buffer_steps = max(math.ceil(seconds_remaining / SONG_LENGTH), 0)
 
         # gate on the smoothed value, not the raw one: the raw gate can dip
         # to 0 for a single song while the EMA trend is still above it, which
