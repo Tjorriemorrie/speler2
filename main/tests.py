@@ -1,4 +1,4 @@
-from datetime import timedelta
+from datetime import datetime, timedelta
 from unittest.mock import patch
 
 import pytest
@@ -762,3 +762,36 @@ def test_next_rating_winner_without_match_is_ignored(mock_set, client, editable_
 def test_parsemusic_validate_accepts_command_options(db):
     """The validate sub-command runs with the options Django passes to every command."""
     call_command('parsemusic', 'validate', '--no-delete')
+
+
+# next_song_view: counting the previous play
+
+
+@pytest.fixture()
+def stale_session(client, editable_song):
+    """A session whose song was handed out longer ago than the ratings window."""
+    session = client.session
+    session['song_id'] = editable_song.id
+    session['song_timestamp'] = (datetime.now() - timedelta(hours=2)).isoformat()
+    session.save()
+    return editable_song
+
+
+@patch('main.views.Song.file_exists', autospec=True, return_value=True)
+@patch('main.views.set_played', autospec=True)
+def test_next_song_counts_ended_song_after_long_pause(mock_played, _, client, stale_session):
+    """A song that played to the end counts even if it sat paused past the window."""
+    with patch('main.views.get_next_song', return_value=stale_session):
+        client.get(reverse('next_song'), {'ended': '1'})
+
+    mock_played.assert_called_once_with(stale_session)
+
+
+@patch('main.views.Song.file_exists', autospec=True, return_value=True)
+@patch('main.views.set_played', autospec=True)
+def test_next_song_drops_stale_song_without_ended(mock_played, _, client, stale_session):
+    """A stale song that did not play out is not counted."""
+    with patch('main.views.get_next_song', return_value=stale_session):
+        client.get(reverse('next_song'))
+
+    mock_played.assert_not_called()

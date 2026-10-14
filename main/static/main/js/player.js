@@ -15,9 +15,10 @@ $(document).ready(function () {
     const player = new Plyr($audioElement[0], {autoplay: false});
 
     // Function to load the next song
-    function loadNextSong() {
-        console.log("loading next song...");
-        htmx.ajax('GET', '/next-song/', {
+    // ended tells the server the song played out, so it counts even after a long pause
+    function loadNextSong(ended = false) {
+        console.log("loading next song...", ended ? "(ended)" : "");
+        htmx.ajax('GET', ended ? '/next-song/?ended=1' : '/next-song/', {
             target: '#player-container',
             swap: 'innerHTML'
         });
@@ -26,7 +27,7 @@ $(document).ready(function () {
     // Listen for when the song ends
     player.on('ended', function () {
         console.log("song ended");
-        loadNextSong();  // Load next song when the current one ends
+        loadNextSong(true);  // Load next song when the current one ends
     });
 
     // Listen for HTMX swap events

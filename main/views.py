@@ -49,8 +49,11 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     last_song_id = request.session.get('song_id')
     song_timestamp = request.session.get('song_timestamp')
 
-    # Check if `song_id` exists and is older than 15 minutes
-    if last_song_id and song_timestamp:
+    # a song that played to the end counts however long it sat paused; otherwise
+    # drop a stale one so an abandoned session doesn't log a play on the next visit
+    if request.GET.get('ended'):
+        logger.info(f'🎵 Song {last_song_id} ended, counting play regardless of age')
+    elif last_song_id and song_timestamp:
         song_time = datetime.fromisoformat(song_timestamp)
         time_diff = (datetime.now() - song_time).total_seconds()
         if time_diff > RATINGS_WINDOW:
