@@ -180,7 +180,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         upcoming = sum(top_counts) / len(top_counts) - space_per_artist
         logger.info(
             f'⏳ Recent history: window={RATINGS_WINDOW / 60:.0f} min, '
-            f'in_window={window_plays}, slots={slots}'
+            f'slots={slots}, in_window={window_plays}'
         )
         # too few unique artists and too many repeats queued are the same
         # underlying symptom (an album add flooding the top of the priority
@@ -204,7 +204,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         else:
             countdown = countdown[-COUNTDOWN_WINDOW:]
         caches['persistent'].set('add_album_countdown', countdown, timeout=None)
-        logger.info(f'Countdown: [{upcoming:.2f}] {", ".join(f"{x:.2f}" for x in countdown)}')
+        logger.info(f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)} -> {upcoming:.2f}')
 
         # a newly added album still needs its ratings window to elapse before
         # another add is suggested; convert the remaining window time into an
