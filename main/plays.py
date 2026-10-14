@@ -33,6 +33,8 @@ COUNTDOWN_MIN_POINTS = 2
 MIN_HISTORY_FOR_NEW_SONGS = 2
 COUNTDOWN_MIN_SLOPE = -1e-6
 COUNTDOWN_ALPHA = 0.1
+# a rise means a new backlog to clear, so follow it up faster than it decays
+COUNTDOWN_ALPHA_RISING = 0.33
 
 
 def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, None]:
@@ -53,7 +55,7 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
 
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
-COUNTDOWN_WINDOW = 7
+COUNTDOWN_WINDOW = 11
 # while the trend is rising the history shrinks towards this, never below it
 COUNTDOWN_MIN_WINDOW = 3
 
@@ -177,8 +179,8 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         top_counts = sorted((queue[name] for name in history_artist_names), reverse=True)[:slots]
         upcoming = sum(top_counts) / len(top_counts) - space_per_artist
         logger.info(
-            f'⏳ Countdown backlog: artists={unique_count}, slots={slots}, '
-            f'used={len(top_counts)}, backlog={sum(top_counts)}, upcoming={upcoming:.2f}'
+            f'⏳ Recent history: window={RATINGS_WINDOW / 60:.0f} min, '
+            f'in_window={window_plays}, slots={slots}'
         )
         # too few unique artists and too many repeats queued are the same
         # underlying symptom (an album add flooding the top of the priority
@@ -191,9 +193,8 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         # step, so the series zig-zags and a line fitted through it twitches.
         # an EMA damps the song-to-song jitter but still follows a real change
         countdown = caches['persistent'].get('add_album_countdown', [])
-        smoothed = (
-            COUNTDOWN_ALPHA * gate + (1 - COUNTDOWN_ALPHA) * countdown[-1] if countdown else gate
-        )
+        alpha = COUNTDOWN_ALPHA_RISING if countdown and gate > countdown[-1] else COUNTDOWN_ALPHA
+        smoothed = alpha * gate + (1 - alpha) * countdown[-1] if countdown else gate
         countdown = countdown + [smoothed]
         steps = _slope_steps_remaining(countdown, smoothed) if smoothed > 0 else 0
         if steps is None:
@@ -203,7 +204,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         else:
             countdown = countdown[-COUNTDOWN_WINDOW:]
         caches['persistent'].set('add_album_countdown', countdown, timeout=None)
-        logger.info(f'Countdown: {", ".join(f"{x:.2f}" for x in countdown)}')
+        logger.info(f'Countdown: [{upcoming:.2f}] {", ".join(f"{x:.2f}" for x in countdown)}')
 
         # a newly added album still needs its ratings window to elapse before
         # another add is suggested; convert the remaining window time into an

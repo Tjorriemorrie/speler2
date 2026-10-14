@@ -388,6 +388,19 @@ def test_countdown_shrinks_while_rising(catalog):
     assert len(caches['persistent'].get('add_album_countdown')) == 8
 
 
+@patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
+@patch('main.plays.COUNTDOWN_ALPHA', 0.0)
+@patch('main.plays.COUNTDOWN_ALPHA_RISING', 1.0)
+def test_countdown_rises_with_faster_alpha(catalog):
+    """A gate above the last smoothed point is followed with the rising alpha."""
+    caches['persistent'].set('add_album_countdown', [0.0], timeout=None)
+
+    get_next_song()
+
+    # the normal alpha of 0 would have held it at 0
+    assert caches['persistent'].get('add_album_countdown')[-1] > 0
+
+
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 1)
 def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     """A window holding more artists than slots averages only the top queue counts."""
@@ -397,7 +410,8 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     with caplog.at_level('INFO', logger='main.plays'):
         get_next_song()
 
-    assert any('used=1, backlog=1,' in m for m in caplog.messages)
+    # backlog of 1 over 1 slot, less the 3 spaces per artist
+    assert any('[-2.00]' in m for m in caplog.messages)
 
 
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)

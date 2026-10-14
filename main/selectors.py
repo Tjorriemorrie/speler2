@@ -224,20 +224,12 @@ def get_recent_artists() -> QuerySet[History]:
     min_count = round(NUM_SLOTS_IN_WINDOW)
 
     # Query the History model for songs played in the time window
+    # logged by get_next_song alongside the countdown, which has the same counts
     recent_histories = History.objects.filter(played_at__gte=time_threshold)
-    window_count = recent_histories.count()
-    if window_count >= min_count:
-        logger.info(
-            f'🕘 Recent history from window: window={RATINGS_WINDOW / 60:.0f} min, '
-            f'count={window_count}, slots={min_count}'
-        )
+    if recent_histories.count() >= min_count:
         return recent_histories
 
     # fewer plays in the window than slots: the latest slot-count plays hold them all
-    logger.info(
-        f'🕘 Recent history from latest plays: window={RATINGS_WINDOW / 60:.0f} min, '
-        f'in_window={window_count}, count={min_count}'
-    )
     return History.objects.all()[:min_count]
 
 
