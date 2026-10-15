@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import timedelta
 from unittest.mock import patch
 
 import pytest
@@ -768,30 +768,29 @@ def test_parsemusic_validate_accepts_command_options(db):
 
 
 @pytest.fixture()
-def stale_session(client, editable_song):
-    """A session whose song was handed out longer ago than the ratings window."""
+def playing_session(client, editable_song):
+    """A session with a song handed out to the player."""
     session = client.session
     session['song_id'] = editable_song.id
-    session['song_timestamp'] = (datetime.now() - timedelta(hours=2)).isoformat()
     session.save()
     return editable_song
 
 
 @patch('main.views.Song.file_exists', autospec=True, return_value=True)
 @patch('main.views.set_played', autospec=True)
-def test_next_song_counts_ended_song_after_long_pause(mock_played, _, client, stale_session):
-    """A song that played to the end counts even if it sat paused past the window."""
-    with patch('main.views.get_next_song', return_value=stale_session):
-        client.get(reverse('next_song'), {'ended': '1'})
+def test_next_song_counts_previous_song(mock_played, _, client, playing_session):
+    """Moving on from a song (ended or skipped) counts it, however long it was paused."""
+    with patch('main.views.get_next_song', return_value=playing_session):
+        client.get(reverse('next_song'))
 
-    mock_played.assert_called_once_with(stale_session)
+    mock_played.assert_called_once_with(playing_session)
 
 
 @patch('main.views.Song.file_exists', autospec=True, return_value=True)
 @patch('main.views.set_played', autospec=True)
-def test_next_song_drops_stale_song_without_ended(mock_played, _, client, stale_session):
-    """A stale song that did not play out is not counted."""
-    with patch('main.views.get_next_song', return_value=stale_session):
-        client.get(reverse('next_song'))
+def test_next_song_ignores_previous_song_on_refresh(mock_played, _, client, playing_session):
+    """A page refresh does not count the song left over in the session."""
+    with patch('main.views.get_next_song', return_value=playing_session):
+        client.get(reverse('next_song'), {'refresh': '1'})
 
     mock_played.assert_not_called()

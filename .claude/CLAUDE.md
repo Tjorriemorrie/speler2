@@ -85,6 +85,13 @@ without requiring the user to repeat the information later.
   `musicfiles.write_song_title`, then save the model. Any future field made editable must keep
   that file-then-db order, otherwise a failed write silently desyncs the two.
 
+## Play counting
+
+- `next_song_view` counts the session's previous song as played on every request (song ended,
+  skip, demand, filter), however long it was paused. The only exception is the page-load request
+  from `home.html`, which sends `?refresh=1`. A new path that loads the player without the user
+  moving on must send `refresh` too.
+
 ## Caching
 
 - `default` is LocMem and is wiped on every restart - fine for querysets, graphs and filters.

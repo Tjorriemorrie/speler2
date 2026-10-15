@@ -4,7 +4,7 @@
 
     <div class="row header mt-1">
         <div class="col-8 col-lg-8 offset-lg-1 col-xl-7 offset-xl-2" id="player-container"
-             hx-get="{% url "next_song" %}"
+             hx-get="{% url "next_song" %}?refresh=1"
              hx-trigger="load"
              hx-target="#player-container"
              hx-swap="innerHTML">

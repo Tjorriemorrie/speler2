@@ -1,6 +1,5 @@
 import logging
 import re
-from datetime import datetime
 from pathlib import Path
 
 import requests
@@ -22,7 +21,7 @@ from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
 from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, validate_songs, write_song_title
-from main.plays import RATINGS_WINDOW, get_next_song, handle_genre_filter, set_genre, set_played
+from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 from main.selectors import (
     get_albums_by_year_chart,
@@ -47,18 +46,13 @@ def home_view(request: WSGIRequest):
 def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     """Return next song."""
     last_song_id = request.session.get('song_id')
-    song_timestamp = request.session.get('song_timestamp')
 
-    # a song that played to the end counts however long it sat paused; otherwise
-    # drop a stale one so an abandoned session doesn't log a play on the next visit
-    if request.GET.get('ended'):
-        logger.info(f'🎵 Song {last_song_id} ended, counting play regardless of age')
-    elif last_song_id and song_timestamp:
-        song_time = datetime.fromisoformat(song_timestamp)
-        time_diff = (datetime.now() - song_time).total_seconds()
-        if time_diff > RATINGS_WINDOW:
-            logger.info(f'Clearing song ID {last_song_id} older than {RATINGS_WINDOW} minutes.')
-            last_song_id = None
+    # every request comes from the player moving on (song ended, skip, demand,
+    # filter) except the page load, which only restores the player - so the
+    # song left over from before a refresh is not a play
+    if request.GET.get('refresh'):
+        logger.info(f'🔄 Page refreshed, not counting song {last_song_id} as played')
+        last_song_id = None
 
     if last_song_id:
         try:
@@ -103,7 +97,6 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
 
     # store for matches and history
     request.session['song_id'] = next_song.id
-    request.session['song_timestamp'] = datetime.now().isoformat()
 
     # Check if filter_facet is not None and has at least one item
     if filter_facet := cache.get('filter_facet'):
