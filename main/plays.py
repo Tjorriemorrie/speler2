@@ -23,6 +23,7 @@ from main.selectors import get_recent_artists
 
 logger = logging.getLogger(__name__)
 
+SPACE_PER_ARTIST = 5
 SONG_LENGTH = 4 * 60
 RATINGS_WINDOW = 30 * 60
 NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
@@ -55,9 +56,9 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
 
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
-COUNTDOWN_WINDOW = 11
+COUNTDOWN_WINDOW = 12
 # while the trend is rising the history shrinks towards this, never below it
-COUNTDOWN_MIN_WINDOW = 3
+COUNTDOWN_MIN_WINDOW = 2
 
 
 def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
@@ -170,14 +171,13 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
             f'{NEXT_SONG_LOOKUP_LIMIT} priority queue!'
         )
     elif next_song:
-        space_per_artist = 3
         unique_count = len(history_artist_names)
         # mean backlog over the slot count's highest queued artists: a window
         # holding more artists than slots would otherwise dilute an album's
         # flood of queued songs across artists that have nothing queued
         slots = round(NUM_SLOTS_IN_WINDOW)
         top_counts = sorted((queue[name] for name in history_artist_names), reverse=True)[:slots]
-        upcoming = sum(top_counts) / len(top_counts) - space_per_artist
+        upcoming = sum(top_counts) / len(top_counts) - SPACE_PER_ARTIST
         logger.info(
             f'⏳ Recent history: window={RATINGS_WINDOW / 60:.0f} min, '
             f'slots={slots}, in_window={window_plays}'
