@@ -56,7 +56,7 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
 
 # one rotation's worth of history: long enough to see a trend, short enough that
 # a spike from an album add falls out of the slope fit once the queue moves past it
-COUNTDOWN_WINDOW = 12
+COUNTDOWN_WINDOW = 11
 # while the trend is rising the history shrinks towards this, never below it
 COUNTDOWN_MIN_WINDOW = 2
 
