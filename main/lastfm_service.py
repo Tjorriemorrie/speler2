@@ -33,8 +33,9 @@ def get_network() -> LastFMNetwork:
 def scrobble(history: History):
     """Scrobble history."""
     if not settings.LASTFM_ENABLE:
+        logger.info(f'🎧 LastFM disabled, not scrobbling {history}')
         return
-    logger.info(f'Scrobbling {history}')
+    logger.info(f'🎧 Scrobbling {history}')
     song = history.song
     timestamp = int(history.played_at.timestamp())
     network = get_network()
@@ -46,8 +47,14 @@ def scrobble(history: History):
             album=song.album.name,
             track_number=song.track_number,
         )
-    except pylast.NetworkError:
-        logger.error('Timeout connecting to LastFM')
+    except pylast.PyLastError as exc:
+        # last.fm outages (503 etc) must not break playback
+        logger.warning(
+            f'⚠️ Scrobble to LastFM failed: history_id={history.id}, artist={song.artist.name}, '
+            f'title={song.name}, album={song.album.name}, timestamp={timestamp}, error={exc!r}'
+        )
+        return
+    logger.info(f'🎧 Scrobbled {history}')
 
 
 def update_next_similar_artist():

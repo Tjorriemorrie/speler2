@@ -1,6 +1,7 @@
 from datetime import timedelta
 from unittest.mock import patch
 
+import pylast
 import pytest
 from bs4 import BeautifulSoup
 from django.core.cache import cache, caches
@@ -8,7 +9,7 @@ from django.core.management import call_command
 from django.urls import reverse
 from django.utils import timezone
 
-from main.lastfm_service import extract_albums_from_table
+from main.lastfm_service import extract_albums_from_table, scrobble
 from main.models import Album, Artist, History, Similar, Song
 from main.plays import MIN_HISTORY_FOR_NEW_SONGS, _slope_steps_remaining, get_next_song
 from main.selectors import get_recent_artists
@@ -794,3 +795,18 @@ def test_next_song_ignores_previous_song_on_refresh(mock_played, _, client, play
         client.get(reverse('next_song'), {'refresh': '1'})
 
     mock_played.assert_not_called()
+
+
+# scrobble: last.fm outages
+
+
+@patch('main.lastfm_service.get_network', autospec=True)
+def test_scrobble_swallows_lastfm_server_error(mock_network, settings, editable_song):
+    """A 503 from last.fm is logged, not raised, so the next song still plays."""
+    settings.LASTFM_ENABLE = True
+    mock_network.return_value.scrobble.side_effect = pylast.WSError(
+        None, 503, 'Connection to the API failed with HTTP code 503'
+    )
+    history = History.objects.create(song=editable_song, played_at=timezone.now())
+
+    scrobble(history)
