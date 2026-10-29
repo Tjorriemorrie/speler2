@@ -258,6 +258,29 @@ def test_set_match_result_fills_album_and_artist_ratings(rated_songs):
     assert Artist.objects.get(id=winner.artist_id).rating == pytest.approx(expected)
 
 
+def test_set_match_result_skips_missing_loser(rated_songs):
+    """A loser pruned from the library is skipped, the winner still beats the rest."""
+    winner, loser, gone = rated_songs
+    gone_id = gone.id
+    gone.delete()
+
+    missing_ids = set_match_result(winner.id, [winner.id, loser.id, gone_id])
+
+    assert missing_ids == [gone_id]
+    assert Rating.objects.filter(winner=winner, loser=loser).count() == 1
+
+
+def test_set_match_result_missing_winner_rates_nothing(rated_songs):
+    """Without the winner there is nothing to rate."""
+    gone, loser, _ = rated_songs
+    gone_id = gone.id
+    gone.delete()
+
+    set_match_result(gone_id, [gone_id, loser.id])
+
+    assert not Rating.objects.exists()
+
+
 def test_upkeep_fills_album_and_artist_ratings(rated_songs):
     """Upkeep from the admin rates the album and artist the same way."""
     winner, _, _ = rated_songs
@@ -590,7 +613,9 @@ def test_recommended_view_refresh_updates_once(mock_update, rf, db):
     assert 'hx-trigger="load"' not in response.content.decode('utf-8')
 
 
-@pytest.mark.parametrize('days_ago, shown', [(0, '{:%H:%M:%S}'), (1, '{0.day} {0:%b %H:%M:%S}')])
+@pytest.mark.parametrize(
+    ('days_ago', 'shown'), [(0, '{:%H:%M:%S}'), (1, '{0.day} {0:%b %H:%M:%S}')]
+)
 @patch('main.views.update_next_similar_song', autospec=True)
 def test_recommended_view_shows_last_updated(mock_update, rf, seed_songs, days_ago, shown):
     """The time of the latest fetch is shown to the second, with the date only when not today."""
@@ -1133,6 +1158,19 @@ def test_next_rating_winner_without_match_is_ignored(mock_set, client, editable_
     mock_set.assert_not_called()
 
 
+def test_next_rating_names_song_missing_from_match(client, editable_song):
+    """A match song pruned before the click is named in the rating box."""
+    session = client.session
+    session['song_id'] = editable_song.id
+    session['match_ids'] = [editable_song.id, 999999]
+    session['match_names'] = [['Bad Title [HQ]', 'Edit Artist'], ['Dosed', 'RHCP']]
+    session.save()
+
+    response = client.get(reverse('next_rating'), {'winner_id': editable_song.id})
+
+    assert '<span class="title-font">Dosed</span>' in response.content.decode('utf-8')
+
+
 def test_parsemusic_validate_accepts_command_options(db):
     """The validate sub-command runs with the options Django passes to every command."""
     call_command('parsemusic', 'validate', '--no-delete')
@@ -1152,7 +1190,7 @@ def playing_session(client, editable_song):
 
 @patch('main.views.Song.file_exists', autospec=True, return_value=True)
 @patch('main.views.set_played', autospec=True)
-def test_next_song_counts_previous_song(mock_played, _, client, playing_session):
+def test_next_song_counts_previous_song(mock_played, mock_exists, client, playing_session):
     """Moving on from a song (ended or skipped) counts it, however long it was paused."""
     with patch('main.views.get_next_song', return_value=playing_session):
         client.get(reverse('next_song'))
@@ -1162,7 +1200,9 @@ def test_next_song_counts_previous_song(mock_played, _, client, playing_session)
 
 @patch('main.views.Song.file_exists', autospec=True, return_value=True)
 @patch('main.views.set_played', autospec=True)
-def test_next_song_ignores_previous_song_on_refresh(mock_played, _, client, playing_session):
+def test_next_song_ignores_previous_song_on_refresh(
+    mock_played, mock_exists, client, playing_session
+):
     """A page refresh does not count the song left over in the session."""
     with patch('main.views.get_next_song', return_value=playing_session):
         client.get(reverse('next_song'), {'refresh': '1'})

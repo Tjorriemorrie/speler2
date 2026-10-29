@@ -36,7 +36,8 @@ of the songs and how recently it was played. This way, songs you like are played
 it tries to avoid repeating the same artist within an hour. You can see in the log that it waits for
 a little time to pass before repeating the same artist (showing how many is still in the queue).
 
-A song's rating is its win ratio in those matches. Albums and artists use a bayesian average so one
+A song's rating is its win ratio in those matches. A match song removed from the library before
+you click is skipped (and named in the rating box); the others are still rated. Albums and artists use a bayesian average so one
 great single can't top the list: an album averages its songs, filled up to 10 with the library's
 mean song rating; an artist averages its albums, filled up to 3 with the mean album rating.
 

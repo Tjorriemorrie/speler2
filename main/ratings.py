@@ -105,14 +105,24 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
     logger.warning(f'Could not find any match for {song_ids}')
 
 
-def set_match_result(winner_id: int, loser_ids: List[int]):
-    """Set winner against the losers."""
-    winner = Song.objects.get(id=winner_id)
+def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:
+    """Set winner against the losers, skipping songs no longer in the library.
+
+    Returns the ids of the skipped songs. Without the winner or any loser nothing is rated.
+    """
+    found = Song.objects.in_bulk([winner_id, *loser_ids])
+    missing_ids = [i for i in dict.fromkeys([winner_id, *loser_ids]) if i not in found]
+    losers = [found[i] for i in loser_ids if i != winner_id and i in found]
+    if winner_id not in found or not losers:
+        logger.warning(
+            f'⚠️ Set match result: nothing left to rate: winner_id={winner_id}, '
+            f'loser_ids={loser_ids}, missing_ids={missing_ids}'
+        )
+        return missing_ids
+
+    winner = found[winner_id]
     songs = {winner}
-    for loser_id in loser_ids:
-        if loser_id == winner_id:
-            continue
-        loser = Song.objects.get(id=loser_id)
+    for loser in losers:
         rating = Rating.objects.create(winner=winner, loser=loser, rated_at=timezone.now())
         logger.info(f'⚖️ Created rating: {rating}')
         songs.add(loser)
@@ -145,9 +155,10 @@ def set_match_result(winner_id: int, loser_ids: List[int]):
 
     logger.info(
         f'⚖️ Set match result: winner_id={winner_id}, losers={len(loser_ids)}, '
-        f'albums={len(albums)}, artists={len(artists)}, song_mean={song_mean:.3f}, '
-        f'album_mean={album_mean:.3f}'
+        f'missing_ids={missing_ids}, albums={len(albums)}, artists={len(artists)}, '
+        f'song_mean={song_mean:.3f}, album_mean={album_mean:.3f}'
     )
+    return missing_ids
 
 
 def get_median_rating():

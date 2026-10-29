@@ -1,4 +1,11 @@
 {% load static %}
+{% if skipped %}
+    <p class="small text-warning ellipsis mb-0 flex-shrink-0">
+        Skipped {% for name, artist in skipped %}<span class="title-font">{{ name }}</span>
+        <em class="artist-font">{{ artist }}</em>{% if not forloop.last %}, {% endif %}{% endfor %}:
+        no longer in the library
+    </p>
+{% endif %}
 {% if match %}
     {% for song in match %}
         <a id="rating-box-{{ forloop.counter }}" class="text-reset text-decoration-none" href="#"

@@ -130,15 +130,20 @@ def next_rating_view(request: WSGIRequest):
     """Return next rating."""
     winner_id = request.GET.get('winner_id')
     song_id = request.session.get('song_id')
+    match_ids = request.session.get('match_ids')
+    skipped = []
+    if winner_id and not match_ids:
+        logger.warning(
+            f'⚠️ Next rating: no match in session, ignoring winner: '
+            f'song_id={song_id}, winner_id={winner_id}'
+        )
+    elif winner_id:
+        missing_ids = set_match_result(int(winner_id), list(map(int, match_ids)))
+        # the skipped songs are gone from the db, so name them from the session
+        names = dict(zip(match_ids, request.session.get('match_names') or [], strict=False))
+        skipped = [names.get(i, [f'song {i}', '']) for i in missing_ids]
+
     try:
-        match_ids = request.session.get('match_ids')
-        if winner_id and not match_ids:
-            logger.warning(
-                f'⚠️ Next rating: no match in session, ignoring winner: '
-                f'song_id={song_id}, winner_id={winner_id}'
-            )
-        elif winner_id:
-            set_match_result(int(winner_id), list(map(int, match_ids)))
         current_song = Song.objects.get(id=song_id)
     except Song.DoesNotExist as exc:
         logger.warning(
@@ -149,14 +154,19 @@ def next_rating_view(request: WSGIRequest):
 
     match = get_match(current_song)
     request.session['match_ids'] = [s.id for s in match] if match else None
+    request.session['match_names'] = [[s.name, s.artist.name] for s in match] if match else None
 
-    response = render(request, 'main/partial_song_rating.html', {'match': match})
+    ctx = {'match': match, 'skipped': skipped}
+    response = render(request, 'main/partial_song_rating.html', ctx)
 
     if not match:
         # Set the HX-Trigger header to reload album view with ratings on it
         response['HX-Trigger'] = 'refreshAlbum'
 
-    logger.info(f'⚖️ Next rating: song_id={song_id}, match_count={len(match) if match else 0}')
+    logger.info(
+        f'⚖️ Next rating: song_id={song_id}, match_count={len(match) if match else 0}, '
+        f'skipped={len(skipped)}'
+    )
     return response
 
 
