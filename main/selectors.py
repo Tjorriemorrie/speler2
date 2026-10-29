@@ -29,8 +29,8 @@ logger = logging.getLogger(__name__)
 
 DAILY_TO_WEEKLY_THRESHOLD_DAYS = 365
 # a bad album with any song below these has not had a fair chance yet, so it is struck through
-BAD_ALBUM_MIN_SONG_PLAYS = 2
-BAD_ALBUM_MIN_SONG_RATINGS = 10
+BAD_ALBUM_MIN_SONG_PLAYS = 3
+BAD_ALBUM_MIN_SONG_RATINGS = 15
 
 
 def get_play_count_chart():
@@ -270,7 +270,14 @@ def list_lowest_rated_artists(multiple_albums: bool = True) -> QuerySet[Artist]:
 
 
 def list_lowest_rated_albums() -> List[Album]:
-    """Get albums by lowest rating, flagging those with a song not yet played or rated enough."""
+    """Get albums by lowest rating, flagging those with a song not yet played or rated enough.
+
+    Lists one slot count of albums: get_next_song bumps their songs that are short of a fair
+    chance, so the list is no longer than one ratings window can work through.
+    """
+    from main.plays import NUM_SLOTS_IN_WINDOW  # noqa: PLC0415  circular import
+
+    limit = round(NUM_SLOTS_IN_WINDOW)
     albums = list(
         Album.objects.annotate(
             min_song_plays=Min('songs__count_played'),
@@ -283,11 +290,12 @@ def list_lowest_rated_albums() -> List[Album]:
                 output_field=BooleanField(),
             )
         )
-        .order_by('rating')[:10]
+        .order_by('rating')[:limit]
     )
     count_struck = sum(album.needs_more_chances for album in albums)
     logger.info(
-        f'📉 Listed lowest rated albums: albums_count={len(albums)}, struck={count_struck}, '
+        f'📉 Listed lowest rated albums: albums_count={len(albums)}/{limit}, '
+        f'struck={count_struck}, '
         f'min_song_plays={BAD_ALBUM_MIN_SONG_PLAYS}, min_song_ratings={BAD_ALBUM_MIN_SONG_RATINGS}'
     )
     return albums

@@ -64,8 +64,9 @@ Last.fm matches titles literally (curly `’` fails where `'` works); unknown tr
 pylast fixes its timeout (5s connect, 10s read), so this fetch retries network errors 3×; scrobbles don't.
 
 It also checks wikipedia for artist info if you have missed an album (beta), and lists the lowest
-rated albums as removal candidates. An album is struck through while any song on it has fewer than
-2 plays or 10 ratings (not had a fair chance yet).
+rated albums as removal candidates (8, one ratings window of slots). An album is struck through while
+any song on it has fewer than 3 plays or 15 ratings (not had a fair chance yet; 5 ratings per play).
+Those songs get +1 play priority, so the list clears quickly; it is re-read every 30 minutes.
 
 
 ## How to use

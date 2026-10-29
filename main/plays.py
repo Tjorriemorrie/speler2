@@ -10,7 +10,7 @@ import simpleaudio as sa
 from django.conf import settings
 from django.core.cache import cache, caches
 from django.db import connection
-from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Sum, Value
+from django.db.models import Avg, ExpressionWrapper, F, FloatField, Max, Q, Sum, Value
 from django.db.models.expressions import Case, Func, RawSQL, When
 from django.utils import timezone
 from django.utils.timezone import make_aware
@@ -19,7 +19,12 @@ from unidecode import unidecode
 from main.constants import LIST_GENRES
 from main.lastfm_service import scrobble
 from main.models import Album, Artist, History, Song
-from main.selectors import get_recent_artists
+from main.selectors import (
+    BAD_ALBUM_MIN_SONG_PLAYS,
+    BAD_ALBUM_MIN_SONG_RATINGS,
+    get_recent_artists,
+    list_lowest_rated_albums,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -82,12 +87,18 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         logger.info(f'Filtering on genres {filter_genres}')
         query = query.filter(**filter_genres)
 
-    # bump the worst albums
-    # worst_albums_ids = [a.id for a in list_lowest_rated_albums()]
+    # bump the worst albums' songs that keep them struck through, so they get their fair
+    # chance sooner. the ids are held for a ratings window: the list shifts with every rating,
+    # and ids (not albums) because a removed album must not linger as a cached instance
+    bad_album_ids = cache.get('bad_album_ids')
+    if bad_album_ids is None:
+        bad_album_ids = [album.id for album in list_lowest_rated_albums()]
+        cache.set('bad_album_ids', bad_album_ids, timeout=RATINGS_WINDOW)
+        logger.info(f'📉 Cached bad albums to bump: albums_count={len(bad_album_ids)}')
 
     # Annotate priority
     weight_played_once = 0.26
-    # weight_bad_album = 0.4
+    weight_bad_album = 1.0
     songs_with_priority = (
         query.annotate(
             time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
@@ -104,12 +115,19 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
                     When(count_played=1, then=Value(weight_played_once)),
                     default=Value(0.0),
                     output_field=FloatField(),
+                )
+                + Case(
+                    When(
+                        Q(album_id__in=bad_album_ids)
+                        & (
+                            Q(count_played__lt=BAD_ALBUM_MIN_SONG_PLAYS)
+                            | Q(count_rated__lt=BAD_ALBUM_MIN_SONG_RATINGS)
+                        ),
+                        then=Value(weight_bad_album),
+                    ),
+                    default=Value(0.0),
+                    output_field=FloatField(),
                 ),
-                # + Case(
-                #     When(album_id__in=worst_albums_ids, then=Value(weight_bad_album)),
-                #     default=Value(0.0),
-                #     output_field=FloatField(),
-                # )
                 output_field=FloatField(),
             )
         )

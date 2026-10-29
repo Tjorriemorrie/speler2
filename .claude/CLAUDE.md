@@ -98,6 +98,15 @@ without requiring the user to repeat the information later.
   from `home.html`, which sends `?refresh=1`. A new path that loads the player without the user
   moving on must send `refresh` too.
 
+## Play priority
+
+- Bad albums get their fair chance through the play queue: `get_next_song` adds `weight_bad_album`
+  to songs on the `list_lowest_rated_albums` albums (one slot count of them) that are still under
+  `BAD_ALBUM_MIN_SONG_PLAYS` / `_RATINGS`, the same test that strikes the album through. The bump is
+  per song, never per album, so it stops by itself once the album has had its chance; a bad album
+  the user keeps is not played forever. The album ids (not instances) are cached for
+  `RATINGS_WINDOW`.
+
 ## Ratings and stored stats
 
 - Song rating = wins / ratings. Album and artist ratings are bayesian filled means, computed only

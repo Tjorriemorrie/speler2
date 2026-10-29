@@ -200,9 +200,9 @@ def _make_album(slug: str, rating: float, songs: list[tuple[int, int]]) -> Album
 
 def test_lowest_rated_albums_flags_albums_with_a_song_lacking_plays_or_ratings(db):
     """One song short on plays or ratings flags its album, which is still listed."""
-    _make_album('rated', rating=0.4, songs=[(2, 10), (5, 12)])
-    _make_album('few-plays', rating=0.1, songs=[(2, 10), (1, 12)])
-    _make_album('few-ratings', rating=0.2, songs=[(2, 9), (5, 12)])
+    _make_album('rated', rating=0.4, songs=[(3, 15), (5, 17)])
+    _make_album('few-plays', rating=0.1, songs=[(3, 15), (2, 17)])
+    _make_album('few-ratings', rating=0.2, songs=[(3, 14), (5, 17)])
 
     flags = [(album.slug, album.needs_more_chances) for album in list_lowest_rated_albums()]
 
@@ -646,7 +646,9 @@ def test_remove_song_deletes_only_that_track(mock_update, rf, seed_songs):
 # get_next_song: skipping unplayed songs while the history window is short
 
 
-def _make_song(slug: str, rating: float, count_played: int = 0, days_ago: int = 0) -> Song:
+def _make_song(
+    slug: str, rating: float, count_played: int = 0, days_ago: int = 0, count_rated: int = 0
+) -> Song:
     """Create an artist/album/song trio, played days_ago when count_played is set."""
     artist = Artist.objects.create(name=slug, slug=slug, total_length=3600.0)
     album = Album.objects.create(
@@ -669,6 +671,7 @@ def _make_song(slug: str, rating: float, count_played: int = 0, days_ago: int = 
         track_length=240.0,
         rating=rating,
         count_played=count_played,
+        count_rated=count_rated,
         played_at=timezone.now() - timedelta(days=days_ago) if count_played else None,
     )
 
@@ -821,6 +824,26 @@ def test_countdown_grows_while_falling(catalog):
     get_next_song()
 
     assert len(caches['persistent'].get('add_album_countdown')) == 7
+
+
+# get_next_song: bumping the songs that keep a bad album struck through
+
+
+def test_bumps_only_the_bad_album_song_short_of_a_fair_chance(db):
+    """Both albums are listed as bad, but only the song short of ratings is bumped."""
+    _make_song('fair', rating=0.9, count_played=3, count_rated=15, days_ago=10)
+    short = _make_song('short', rating=0.5, count_played=3, count_rated=14, days_ago=10)
+
+    assert get_next_song() == short
+
+
+def test_bad_albums_are_held_for_the_ratings_window(db):
+    """An album missing from the cached list is not bumped until the list expires."""
+    fair = _make_song('fair', rating=0.9, count_played=3, count_rated=15, days_ago=10)
+    get_next_song()
+    _make_song('short', rating=0.5, count_played=3, count_rated=14, days_ago=10)
+
+    assert get_next_song() == fair
 
 
 # percentile based rank property
