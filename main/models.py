@@ -130,6 +130,9 @@ class Song(Timestamp, Rank):
     # classification
     genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
 
+    # last.fm similar tracks fetched (set even when there were none)
+    similars_at = models.DateTimeField(null=True, blank=True)
+
     # managers
     objects = managers.SongManager()
 
@@ -199,18 +202,24 @@ class Billboard(Timestamp):
 
 
 class Similar(Timestamp):
-    artist = models.ForeignKey(Artist, on_delete=models.CASCADE, related_name='similars')
+    """A last.fm similar track (not in the library) recommended by a library song."""
+
+    song = models.ForeignKey(Song, on_delete=models.CASCADE, related_name='similars')
     artist_name = models.CharField(max_length=250)
     artist_slug = models.SlugField(max_length=250)
+    track_name = models.CharField(max_length=250)
+    track_slug = models.SlugField(max_length=250)
     match = models.FloatField()
     rating = models.FloatField()
     score = models.FloatField()
     scraped_at = models.DateTimeField()
 
     class Meta:
-        unique_together = ['artist', 'artist_slug']
+        unique_together = ['song', 'artist_slug', 'track_slug']
 
     def __str__(self):
         perc = f'{self.score * 100:.0f}%'
-        txt = f'<Similar-{self.id} {self.artist.name} => {self.artist_name} {perc}>'
+        txt = (
+            f'<Similar-{self.id} {self.song.name} => {self.artist_name} - {self.track_name} {perc}>'
+        )
         return unidecode(txt)

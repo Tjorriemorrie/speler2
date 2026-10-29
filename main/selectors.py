@@ -5,18 +5,32 @@ from typing import List
 
 import plotly.graph_objects as go
 from django.core.cache import cache
-from django.db import connection
-from django.db.models import Avg, Count, F, Max, Min, Q, QuerySet, Sum
+from django.db.models import (
+    Avg,
+    BooleanField,
+    Count,
+    ExpressionWrapper,
+    F,
+    Max,
+    Min,
+    Q,
+    QuerySet,
+    Sum,
+)
 from django.db.models.expressions import RawSQL
 from django.db.models.functions import TruncDate, TruncWeek
 from django.utils import timezone
 from django.utils.timezone import make_aware
 
 from main.models import Album, Artist, History, Rating, Song
+from main.ratings import get_album_rating, get_artist_rating, get_mean_rating
 
 logger = logging.getLogger(__name__)
 
 DAILY_TO_WEEKLY_THRESHOLD_DAYS = 365
+# a bad album with any song below these has not had a fair chance yet, so it is struck through
+BAD_ALBUM_MIN_SONG_PLAYS = 2
+BAD_ALBUM_MIN_SONG_RATINGS = 10
 
 
 def get_play_count_chart():
@@ -256,35 +270,27 @@ def list_lowest_rated_artists(multiple_albums: bool = True) -> QuerySet[Artist]:
 
 
 def list_lowest_rated_albums() -> List[Album]:
-    """Get albums by lowest rating."""
-    return Album.objects.exclude(rating__isnull=True).order_by('rating')[:10]
-
-
-def get_avg_played_at():
-    """Calculate the average played_at for all songs using raw SQL."""
-    cache_key = 'global_avg_played_at'
-    if dt := cache.get(cache_key):
-        return dt
-
-    with connection.cursor() as cursor:
-        # Write the SQL query to get the average of UNIX timestamps
-        cursor.execute("""
-            SELECT AVG(strftime('%s', played_at))
-            FROM main_song
-            WHERE played_at IS NOT NULL
-        """)
-
-        # Fetch the result (this will be the average UNIX timestamp)
-        avg_played_timestamp = cursor.fetchone()[0]
-
-    # If there is no valid result, return None
-    if avg_played_timestamp is None:
-        return None
-
-    # Convert the UNIX timestamp back to a datetime object
-    avg_played_at = make_aware(datetime.fromtimestamp(float(avg_played_timestamp)))
-    cache.set(cache_key, avg_played_at, timeout=3600 * 16)  # 16 hours
-    return avg_played_at
+    """Get albums by lowest rating, flagging those with a song not yet played or rated enough."""
+    albums = list(
+        Album.objects.annotate(
+            min_song_plays=Min('songs__count_played'),
+            min_song_ratings=Min('songs__count_rated'),
+        )
+        .annotate(
+            needs_more_chances=ExpressionWrapper(
+                Q(min_song_plays__lt=BAD_ALBUM_MIN_SONG_PLAYS)
+                | Q(min_song_ratings__lt=BAD_ALBUM_MIN_SONG_RATINGS),
+                output_field=BooleanField(),
+            )
+        )
+        .order_by('rating')[:10]
+    )
+    count_struck = sum(album.needs_more_chances for album in albums)
+    logger.info(
+        f'📉 Listed lowest rated albums: albums_count={len(albums)}, struck={count_struck}, '
+        f'min_song_plays={BAD_ALBUM_MIN_SONG_PLAYS}, min_song_ratings={BAD_ALBUM_MIN_SONG_RATINGS}'
+    )
+    return albums
 
 
 def upkeep_song(song: Song):
@@ -320,10 +326,10 @@ def upkeep_album(album: Album):
     # lastly handle ratings
     album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
     album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
-    album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
+    album.rating = get_album_rating(album, get_mean_rating(Song))
 
     album.save()
-    logger.info(f'Upkept {album}')
+    logger.info(f'🔧 Upkept {album}: rating={album.rating:.3f}')
 
 
 def upkeep_artist(artist: Artist):
@@ -342,7 +348,7 @@ def upkeep_artist(artist: Artist):
     # lastly handle ratings
     artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
     artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
-    artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
+    artist.rating = get_artist_rating(artist, get_mean_rating(Album))
 
     artist.save()
-    logger.info(f'Upkept {artist}')
+    logger.info(f'🔧 Upkept {artist}: rating={artist.rating:.3f}')

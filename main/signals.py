@@ -5,9 +5,33 @@ from django.db.models import Model, Q
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
 
-from main.models import History, Rating, Song
+from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
+
+
+@receiver(post_delete, sender=Song)
+def mark_album_dirty_on_song_delete(
+    sender: Type[Model], instance: Song, using: Optional[str], **kwargs: Any
+) -> None:
+    """Mark the song's album dirty, so cleanstats recounts it (and in turn its artist)."""
+    marked = Album.objects.filter(id=instance.album_id).update(is_dirty=True)
+    logger.info(
+        f'🗑️ Song deleted, album marked dirty: song_id={instance.id}, '
+        f'album_id={instance.album_id}, marked={marked}'
+    )
+
+
+@receiver(post_delete, sender=Album)
+def mark_artist_dirty_on_album_delete(
+    sender: Type[Model], instance: Album, using: Optional[str], **kwargs: Any
+) -> None:
+    """Mark the album's artist dirty, so cleanstats recounts it."""
+    marked = Artist.objects.filter(id=instance.artist_id).update(is_dirty=True)
+    logger.info(
+        f'🗑️ Album deleted, artist marked dirty: album_id={instance.id}, '
+        f'artist_id={instance.artist_id}, marked={marked}'
+    )
 
 
 @receiver(post_delete, sender=Rating)

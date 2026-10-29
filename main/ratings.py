@@ -1,17 +1,49 @@
 import logging
 from datetime import timedelta
 from itertools import combinations
-from typing import List, Optional
+from typing import Iterable, List, Optional, Type
 
 from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
-from main.models import History, Rating, Song
+from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
 RATINGS_PER_PLAY = 5
+# album and artist ratings are bayesian averages: an album short of ALBUM_FILL_SONGS songs is
+# filled up with the library's mean song rating, an artist short of ARTIST_FILL_ALBUMS albums
+# with the mean album rating, so one great single (or album) can't outrank a run of great ones
+ALBUM_FILL_SONGS = 10
+ARTIST_FILL_ALBUMS = 3
+
+
+def filled_mean(ratings: Iterable[float], size: int, filler: float) -> float:
+    """Average the ratings, filled up to size with the filler rating."""
+    ratings = list(ratings)
+    padding = max(0, size - len(ratings))
+    return (sum(ratings) + padding * filler) / (len(ratings) + padding)
+
+
+def get_mean_rating(model: Type[Song] | Type[Album]) -> float:
+    """Get the library's mean rating of songs or albums, the filler for short albums/artists."""
+    return model.objects.aggregate(Avg('rating'))['rating__avg'] or 0
+
+
+def get_album_rating(album: Album, song_mean: float) -> float:
+    """Get the album rating: its song ratings filled up with the library's mean song rating."""
+    ratings = album.songs.values_list('rating', flat=True)
+    return filled_mean(ratings, ALBUM_FILL_SONGS, song_mean)
+
+
+def get_artist_rating(artist: Artist, album_mean: float) -> float:
+    """Get the artist rating: its album ratings filled up with the library's mean album rating.
+
+    Reads the stored album ratings, so update the albums first.
+    """
+    ratings = artist.albums.values_list('rating', flat=True)
+    return filled_mean(ratings, ARTIST_FILL_ALBUMS, album_mean)
 
 
 def get_recent_songs_from_history() -> List[Song]:
@@ -82,7 +114,7 @@ def set_match_result(winner_id: int, loser_ids: List[int]):
             continue
         loser = Song.objects.get(id=loser_id)
         rating = Rating.objects.create(winner=winner, loser=loser, rated_at=timezone.now())
-        logger.info(f'Created rating: {rating}')
+        logger.info(f'⚖️ Created rating: {rating}')
         songs.add(loser)
 
     albums = set()
@@ -96,18 +128,26 @@ def set_match_result(winner_id: int, loser_ids: List[int]):
         albums.add(song.album)
 
     artists = set()
+    song_mean = get_mean_rating(Song)
     for album in albums:
         album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
         album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
-        album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
+        album.rating = get_album_rating(album, song_mean)
         album.save()
         artists.add(album.artist)
 
+    album_mean = get_mean_rating(Album)
     for artist in artists:
         artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
         artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
-        artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
+        artist.rating = get_artist_rating(artist, album_mean)
         artist.save()
+
+    logger.info(
+        f'⚖️ Set match result: winner_id={winner_id}, losers={len(loser_ids)}, '
+        f'albums={len(albums)}, artists={len(artists)}, song_mean={song_mean:.3f}, '
+        f'album_mean={album_mean:.3f}'
+    )
 
 
 def get_median_rating():

@@ -4,7 +4,7 @@
     <div class="col">
 
         <h3>Similars</h3>
-        <h6>Find similar artists to what you already listen to.</h6>
+        <h6>Find songs similar to what you already listen to.</h6>
 
         <div class="row">
 
@@ -17,15 +17,15 @@
                 <div class="spinner-border spinner-border-sm"></div>
             </div>
 
-            <div class="col-4" id="similars_new_artists"
-                 hx-get="{% url 'similars_new_artists' %}"
+            <div class="col-4" id="similars_recommended"
+                 hx-get="{% url 'similars_recommended' %}"
                  hx-trigger="load"
                  hx-swap="innerHTML">
                 <div class="spinner-border spinner-border-sm"></div>
             </div>
 
-            <div class="col-5" id="similars_bad_artists"
-                 hx-get="{% url 'similars_bad_artists' %}"
+            <div class="col-5" id="similars_bad_albums"
+                 hx-get="{% url 'similars_bad_albums' %}"
                  hx-trigger="load"
                  hx-swap="innerHTML">
                 <div class="spinner-border spinner-border-sm"></div>

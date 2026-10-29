@@ -10,15 +10,26 @@ import pylast
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.db.models import F, Max, Sum
+from django.db import transaction
+from django.db.models import Count, F, Max, Sum
 from django.utils import timezone
 from django.utils.text import slugify
 from pylast import LastFMNetwork
 from unidecode import unidecode
 
-from main.models import Artist, History, Similar
+from main.models import Artist, History, Similar, Song
 
 logger = logging.getLogger(__name__)
+
+# fetch enough similar tracks that the best 10 not already owned are left after filtering
+SIMILARS_FETCH_LIMIT = 50
+SIMILARS_KEEP_LIMIT = 10
+# pylast fixes its timeout (5s connect, 10s read) for every call, so the fetch gets more time by
+# retrying; a scrobble keeps its single attempt, since playback waits on it
+SIMILARS_FETCH_ATTEMPTS = 3
+# order in which songs are fetched as seeds and listed as recommenders
+SIMILARS_SEED_ORDERING = ('-count_played', '-rating', '-artist__rating')
+SIMILARS_SONGS_SHOWN = 10
 
 
 def get_network() -> LastFMNetwork:
@@ -51,54 +62,180 @@ def scrobble(history: History):
         # last.fm outages (503 etc) must not break playback
         logger.warning(
             f'⚠️ Scrobble to LastFM failed: history_id={history.id}, artist={song.artist.name}, '
-            f'title={song.name}, album={song.album.name}, timestamp={timestamp}, error={exc!r}'
+            f'title={song.name}, album={song.album.name}, timestamp={timestamp}, error={exc}'
         )
         return
     logger.info(f'🎧 Scrobbled {history}')
 
 
-def update_next_similar_artist():
-    """Get similar albums."""
+def artist_slug(name: str) -> str:
+    """Slug an artist name the way musicfiles slugs Artist.slug, so Maneskin matches Måneskin."""
+    return slugify(unidecode(name))
+
+
+def track_slug(name: str) -> str:
+    """Slug a track name with bracketed suffixes like (Remastered) or [Live] dropped."""
+    return slugify(unidecode(re.sub(r'\s*[(\[][^)\]]*[)\]]', '', name)))
+
+
+def straighten_quotes(text: str) -> str:
+    """Replace curly apostrophes, which last.fm does not match to straight ones."""
+    return text.replace('’', "'").replace('‘', "'")
+
+
+def _owned_tracks(artist_slugs: set[str]) -> set[tuple[str, str]]:
+    """Get (artist_slug, track_slug) of every library song by these artists."""
+    songs = Song.objects.filter(artist__slug__in=artist_slugs).values_list('artist__slug', 'name')
+    owned = {(slug, track_slug(name)) for slug, name in songs}
+    logger.info(f'🎵 Listed owned tracks: artists_count={len(artist_slugs)}, owned={len(owned)}')
+    return owned
+
+
+def _get_similar_tracks(track: pylast.Track) -> list[pylast.SimilarItem]:
+    """Get the track's similar tracks, retrying network errors such as a timed out handshake."""
+    for attempt in range(1, SIMILARS_FETCH_ATTEMPTS + 1):
+        try:
+            similar_tracks = track.get_similar(limit=SIMILARS_FETCH_LIMIT)
+        except pylast.NetworkError as exc:
+            if attempt == SIMILARS_FETCH_ATTEMPTS:
+                logger.warning(
+                    f'⚠️ LastFM network error on the last attempt, giving up: track={track}, '
+                    f'attempts={attempt}'
+                )
+                raise
+            logger.warning(
+                f'⚠️ LastFM network error, retrying: track={track}, attempt={attempt}, error={exc}'
+            )
+            continue
+        logger.info(
+            f'🎵 Fetched similar tracks: track={track}, attempt={attempt}, '
+            f'count={len(similar_tracks)}'
+        )
+        return similar_tracks
+
+
+def update_next_similar_song():
+    """Store the best similar tracks not owned yet for the next song that has none fetched."""
     if not settings.LASTFM_ENABLE:
+        logger.info('🎵 LastFM disabled, not updating similar songs')
         return
 
-    # scrape artists that does not yet have similars
-    sim_artist_ids = Similar.objects.values('artist_id')
-    next_artist = Artist.objects.exclude(id__in=sim_artist_ids).order_by('-rating').first()
-    if not next_artist:
-        next_artist = Artist.objects.order_by('-rating').first()
+    seed = (
+        Song.objects.filter(similars_at__isnull=True)
+        .select_related('artist')
+        .order_by(*SIMILARS_SEED_ORDERING)
+        .first()
+    )
+    if not seed:
+        logger.info('🎵 Every song has similars fetched, nothing to update')
+        return
 
-    # clear existing rows
-    cnt = Similar.objects.filter(artist=next_artist).delete()
-
-    logger.info(f'Getting similar artists for {next_artist}')
-    network = get_network()
-    lastfm_artist = network.get_artist(next_artist.name)
-    similar_artists = lastfm_artist.get_similar(limit=100)
-    for similar_artist, match in similar_artists:
-        sim_artist_name = similar_artist.get_name()
-        sim_artist_slug = slugify(unidecode(sim_artist_name))
-        score = next_artist.rating * match
-        Similar.objects.create(
-            artist=next_artist,
-            artist_name=sim_artist_name,
-            artist_slug=sim_artist_slug,
-            match=match,
-            rating=next_artist.rating,
-            score=score,
-            scraped_at=timezone.now(),
+    seed_artist = straighten_quotes(seed.artist.name)
+    seed_title = straighten_quotes(seed.name)
+    logger.info(
+        f'🎵 Fetching similar songs: song_id={seed.id}, artist={seed_artist}, title={seed_title}'
+    )
+    try:
+        lastfm_track = get_network().get_track(seed_artist, seed_title)
+        similar_tracks = _get_similar_tracks(lastfm_track)
+    except pylast.PyLastError as exc:
+        # unknown track is final, so it must not block the songs after it; anything else is retried
+        if not (
+            isinstance(exc, pylast.WSError) and exc.status == str(pylast.STATUS_INVALID_PARAMS)
+        ):
+            logger.warning(
+                f'⚠️ Fetching similar songs from LastFM failed, retrying next update: '
+                f'song_id={seed.id}, artist={seed_artist}, title={seed_title}, error={exc}'
+            )
+            return
+        logger.warning(
+            f'⚠️ Song not found on LastFM, marking it done: song_id={seed.id}, '
+            f'artist={seed_artist}, title={seed_title}'
         )
+        similar_tracks = []
 
-    excluded_slugs = Artist.objects.values_list('slug', flat=True)
-    grouped_artists = (
-        Similar.objects.exclude(artist_slug__in=excluded_slugs)
-        .values('artist_slug')
-        .annotate(total_score=Sum('score'), artist_name=Max('artist_name'))
-        .order_by('-total_score')[:10]
+    tracks = [
+        (similar.item.artist.name, similar.item.title, similar.match) for similar in similar_tracks
+    ]
+    # owned tracks are skipped, and so are repeats that slug the same (e.g. a live version)
+    skip = _owned_tracks({artist_slug(name) for name, _, _ in tracks})
+    count_skipped = 0
+    now = timezone.now()
+    similars = []
+    for track_artist, track_name, match in tracks:
+        key = (artist_slug(track_artist), track_slug(track_name))
+        # an empty slug (e.g. a title only in brackets) cannot be put in the remove url
+        if not all(key) or key in skip:
+            count_skipped += 1
+            continue
+        skip.add(key)
+        similars.append(
+            Similar(
+                song=seed,
+                artist_name=track_artist,
+                artist_slug=key[0],
+                track_name=track_name,
+                track_slug=key[1],
+                match=match,
+                rating=seed.rating,
+                score=seed.rating * match,
+                scraped_at=now,
+            )
+        )
+        if len(similars) == SIMILARS_KEEP_LIMIT:
+            break
+
+    with transaction.atomic():
+        Similar.objects.bulk_create(similars)
+        seed.similars_at = now
+        seed.save(update_fields=['similars_at'])
+    logger.info(
+        f'🎵 Similar songs updated: song_id={seed.id}, artist={seed_artist}, title={seed_title}, '
+        f'fetched={len(tracks)}, skipped={count_skipped}, saved={len(similars)}'
     )
 
-    logger.info(f'Similar artists updated for {next_artist} (removed {cnt[0]})')
-    return grouped_artists
+
+def get_recommended_song() -> dict | None:
+    """Get the track most similar across the library, with the best songs that recommended it."""
+    ranked = (
+        Similar.objects.values('artist_slug', 'track_slug')
+        .annotate(
+            total_score=Sum('score'),
+            count_songs=Count('id'),
+            artist_name=Max('artist_name'),
+            track_name=Max('track_name'),
+        )
+        .order_by('-total_score')
+    )
+    for best in ranked:
+        # its album may have been added to the library since it was fetched
+        if (best['artist_slug'], best['track_slug']) not in _owned_tracks({best['artist_slug']}):
+            break
+        deleted, _ = Similar.objects.filter(
+            artist_slug=best['artist_slug'], track_slug=best['track_slug']
+        ).delete()
+        logger.info(
+            f'🎵 Dropped recommendation now in library: artist={best["artist_name"]}, '
+            f'track={best["track_name"]}, deleted={deleted}'
+        )
+    else:
+        logger.info('🎵 No recommended song yet')
+        return None
+
+    best['songs'] = list(
+        Song.objects.filter(
+            similars__artist_slug=best['artist_slug'], similars__track_slug=best['track_slug']
+        )
+        .select_related('artist', 'album')
+        # reuses the filter's join, so each song gets the match of its own row
+        .annotate(match=F('similars__match'))
+        .order_by('-match')[:SIMILARS_SONGS_SHOWN]
+    )
+    logger.info(
+        f'🎵 Recommended song: artist={best["artist_name"]}, track={best["track_name"]}, '
+        f'total_score={best["total_score"]:.3f}, count_songs={best["count_songs"]}'
+    )
+    return best
 
 
 # class LastFm(LastFMNetwork):

@@ -14,6 +14,7 @@ from mutagen import flac, id3, mp3, mp4
 from unidecode import unidecode
 
 from main.models import Album, Artist, Song
+from main.ratings import get_album_rating, get_artist_rating, get_mean_rating
 
 logger = logging.getLogger(__name__)
 
@@ -303,6 +304,7 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         metadata = parse_id3_tag(song.file_path().resolve())
         song_dirty = False
         album_dirty = False
+        old_album_id, old_artist_id = song.album_id, song.artist_id
 
         artist_slug = slugify(unidecode(metadata['artist_name']))
         if song.artist.slug != artist_slug:
@@ -378,8 +380,18 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         if album_dirty or song_dirty:
             outdated_albums.add(song.album)
 
+        # the album and artist moved away from (by the song, or by its album) are miscounted now
+        if song.album_id != old_album_id or song.album.artist_id != old_artist_id:
+            Album.objects.filter(id=old_album_id).update(is_dirty=True)
+            Artist.objects.filter(id=old_artist_id).update(is_dirty=True)
+            logger.info(
+                f'📊 Moved {song}, marked dirty: old_album_id={old_album_id}, '
+                f'old_artist_id={old_artist_id}'
+            )
+
     # update stats on albums
     outdated_artists = set()
+    song_mean = get_mean_rating(Song)
     for album in outdated_albums:
         album.refresh_from_db()
         album.count_songs = album.songs.count()
@@ -395,12 +407,13 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         )
         album.count_rated = album.songs.aggregate(Sum('count_rated'))['count_rated__sum']
         album.rated_at = album.songs.aggregate(Max('rated_at'))['rated_at__max']
-        album.rating = album.songs.aggregate(Avg('rating'))['rating__avg']
+        album.rating = get_album_rating(album, song_mean)
         album.save()
-        logger.info(f'Updated stats for {album}')
+        logger.info(f'📊 Updated stats for {album}: rating={album.rating:.3f}')
         outdated_artists.add(album.artist)
 
     # update stats on artists
+    album_mean = get_mean_rating(Album)
     for artist in outdated_artists:
         artist.refresh_from_db()
         artist.count_albums = artist.albums.count()
@@ -417,8 +430,8 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         )
         artist.count_rated = artist.albums.aggregate(Sum('count_rated'))['count_rated__sum']
         artist.rated_at = artist.albums.aggregate(Max('rated_at'))['rated_at__max']
-        artist.rating = artist.songs.aggregate(Avg('rating'))['rating__avg']
-        logger.info(f'Updated stats for {artist}')
+        artist.rating = get_artist_rating(artist, album_mean)
+        logger.info(f'📊 Updated stats for {artist}: rating={artist.rating:.3f}')
         artist.save()
 
     # ensure to remove dud artists or albums that could be orphans

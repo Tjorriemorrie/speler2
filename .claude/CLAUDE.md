@@ -77,6 +77,12 @@ without requiring the user to repeat the information later.
   heuristic — it flags a parent whenever any descendant has `hx-get`, without checking whether that
   descendant declares its own attribute, so verify before adding `:inherited`.
 
+## UI fonts
+
+- Names get the display fonts from `main.css`, as the player header (`partial_song_player.html`)
+  sets them: song title `title-font`, artist `artist-font` (wrapped in `<em>`), album `album-font`.
+  Tables keep the plain table font.
+
 ## Metadata edits
 
 - Track titles are editable inline on the album track listing (pencil appears on row hover,
@@ -92,9 +98,46 @@ without requiring the user to repeat the information later.
   from `home.html`, which sends `?refresh=1`. A new path that loads the player without the user
   moving on must send `refresh` too.
 
+## Ratings and stored stats
+
+- Song rating = wins / ratings. Album and artist ratings are bayesian filled means, computed only
+  through `main/ratings.py`: `get_album_rating` (songs filled to `ALBUM_FILL_SONGS` with the
+  library's mean song rating) and `get_artist_rating` (albums filled to `ARTIST_FILL_ALBUMS` with
+  the mean album rating). Never inline `Avg('rating')` for albums/artists again: every stats path
+  (`set_match_result`, `upkeep_*`, `recheck_metadata`, `cleanstats`) goes through these helpers.
+- The artist rating reads the *stored* album ratings, so save the albums before rating the
+  artist. Compute the mean (`get_mean_rating`) once per batch, not per row.
+- Anything that leaves stored stats wrong marks the rows `is_dirty` for `cleanstats`, it does not
+  recalculate them inline: `signals.py` marks the song on a rating/history delete, the album on a
+  song delete, the artist on an album delete; `recheck_metadata` marks the album and artist a
+  song moved away from. `cleanstats` cascades songs → albums → artists; `--all` redoes every row.
+
+## Similar songs (last.fm)
+
+- Render first, fetch after: `snippet_similars_recommended.html` renders from the stored `Similar`
+  rows, and only when `refreshed` is false carries an `hx-trigger="load"` element that re-requests
+  the view with `?refresh=1`, which fetches one seed song. The refresh render must not carry the
+  trigger again, or it loops. Reuse this for any other slow external call on page load.
+- `Song.similars_at` marks a seed done even with zero results; the rows can't be the marker because
+  removing a recommendation deletes them. Last.fm "Track not found" (`WSError` status `'6'`, a
+  string) is final; any other `PyLastError` (5xx carry an int status) leaves the song for retry.
+- Matching to the library is by `artist_slug` (= `Artist.slug`, `slugify(unidecode())`) plus
+  `track_slug` (same, bracketed suffixes dropped). Never compare raw names.
+- Scrobbling blocks playback, so it gets one attempt at pylast's default timeout; the similars
+  fetch has nothing waiting on it and may take longer. pylast 5.3 hardcodes `httpx.Timeout(5,
+  read=10)` inside `_Request._download_response` with no setting, and patching it is process-wide
+  (a concurrent scrobble would inherit it), so the similars fetch retries `NetworkError` instead
+  (`SIMILARS_FETCH_ATTEMPTS`).
+- Log pylast errors with `{exc}`, never `{exc!r}`: `NetworkError`'s repr carries the
+  `LastFMNetwork`, i.e. the api key, secret and session key.
+
 ## Caching
 
 - `default` is LocMem and is wiped on every restart - fine for querysets, graphs and filters.
+- Don't cache model instances whose rows can vanish before the timeout: song validation prunes
+  songs, albums and artists. A cached `Album` then lazy-loads a deleted `artist`, the template
+  swallows `DoesNotExist` as `''`, and `{% url 'artist' album.artist.id %}` raises
+  `NoReverseMatch`. Cheap queries (bad albums: ~10 ms) aren't cached at all.
 - `caches['persistent']` is a `FileBasedCache` under `.cache/persistent` (gitignored) for state
   that has to keep building across restarts, currently only `add_album_countdown`. Put a key there
   only if losing it on restart is actually wrong. The autouse fixture in `main/tests.py` swaps it for

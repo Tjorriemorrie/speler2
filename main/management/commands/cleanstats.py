@@ -7,8 +7,11 @@ from django.db.models.expressions import RawSQL
 from django.utils.timezone import make_aware
 
 from main.models import Album, Artist, Rating, Song
+from main.ratings import get_album_rating, get_artist_rating, get_mean_rating
 
 logger = logging.getLogger(__name__)
+
+PROGRESS_EVERY = 1000
 
 
 class Command(BaseCommand):
@@ -22,13 +25,21 @@ class Command(BaseCommand):
             choices=['songs', 'albums', 'artists'],
             help='Specify which stats to clean: songs, albums, artists. If omitted, runs all.',
         )
+        parser.add_argument(
+            '--all',
+            action='store_true',
+            help='Recalculate every row of the target, not only the dirty ones.',
+        )
 
     def handle(self, *args, **options):
         """Run cmd."""
         target = options['target']
 
+        if options['all']:
+            self.mark_all_dirty(target)
+
         if target is None:
-            logger.info('No subcommand provided. Running all: songs → albums → artists')
+            logger.info('🧹 No subcommand provided. Running all: songs → albums → artists')
             self.clean_songs()
             self.clean_albums()
             self.clean_artists()
@@ -39,11 +50,20 @@ class Command(BaseCommand):
         elif target == 'artists':
             self.clean_artists()
 
+        logger.info(f'🧹 Cleaned stats: target={target or "all"}, all_rows={options["all"]}')
+
+    def mark_all_dirty(self, target):
+        """Mark every row of the target (every model when omitted) dirty to recalculate it."""
+        for name, model in (('songs', Song), ('albums', Album), ('artists', Artist)):
+            if target in (None, name):
+                marked = model.objects.update(is_dirty=True)
+                logger.info(f'🧹 Marked all {name} dirty: count={marked}')
+
     def clean_songs(self):
         """Clean songs."""
         dirty_songs = Song.objects.filter(is_dirty=True)
         total = dirty_songs.count()
-        logger.info(f'Cleaning {total} dirty songs...')
+        logger.info(f'🧹 Cleaning {total} dirty songs...')
 
         updated_album_ids = set()
 
@@ -78,32 +98,35 @@ class Command(BaseCommand):
             )
 
             updated_album_ids.add(song.album_id)
-            logger.debug(f'[{i}/{total}] Updated song {song.id}')
+            if i % PROGRESS_EVERY == 0:
+                logger.info(f'🧹 Cleaning songs: processed={i}, total={total}')
 
         updated = Album.objects.filter(id__in=updated_album_ids).update(is_dirty=True)
-        logger.info(f'Marked {updated} albums as dirty.')
+        logger.info(f'🧹 Cleaned {total} songs, marked {updated} albums as dirty.')
 
     def clean_albums(self):
         """Clean albums."""
         dirty_albums = Album.objects.filter(is_dirty=True)
         total = dirty_albums.count()
-        logger.info(f'Cleaning {total} dirty albums...')
+        logger.info(f'🧹 Cleaning {total} dirty albums...')
 
         updated_artist_ids = set()
+        song_mean = get_mean_rating(Song)
 
-        for i, album in enumerate(dirty_albums, start=1):
+        for album in dirty_albums:
             # ensure current values
             album.count_songs = album.songs.count()
 
             # Ratings
             song_agg = album.songs.aggregate(
-                rating=Avg('rating'),
+                total_length=Sum('track_length'),
                 rated_at=Max('rated_at'),
                 count_rated=Sum('count_rated'),
                 count_played=Sum('count_played'),
                 played_at=Max('played_at'),
             )
-            album.rating = song_agg['rating'] or 0
+            album.total_length = song_agg['total_length'] or 0
+            album.rating = get_album_rating(album, song_mean)
             album.rated_at = song_agg['rated_at']
             album.count_rated = song_agg['count_rated'] or 0
             album.count_played = song_agg['count_played'] or 0
@@ -120,6 +143,8 @@ class Command(BaseCommand):
             album.is_dirty = False
             album.save(
                 update_fields=[
+                    'count_songs',
+                    'total_length',
                     'rating',
                     'rated_at',
                     'count_rated',
@@ -131,35 +156,39 @@ class Command(BaseCommand):
             )
 
             updated_artist_ids.add(album.artist_id)
-            logger.debug(f'[{i}/{total}] Updated album {album.id}')
 
         updated = Artist.objects.filter(id__in=updated_artist_ids).update(is_dirty=True)
-        logger.info(f'Marked {updated} artists as dirty.')
+        logger.info(
+            f'🧹 Cleaned {total} albums, marked {updated} artists as dirty: '
+            f'song_mean={song_mean:.3f}'
+        )
 
     def clean_artists(self):
         """Clean artists."""
         dirty_artists = Artist.objects.filter(is_dirty=True)
         total = dirty_artists.count()
-        logger.info(f'Cleaning {total} dirty artists...')
+        logger.info(f'🧹 Cleaning {total} dirty artists...')
 
-        for i, artist in enumerate(dirty_artists, start=1):
+        album_mean = get_mean_rating(Album)
+        for artist in dirty_artists:
             # ensure current values
             artist.count_albums = artist.albums.count()
             artist.count_songs = artist.songs.count()
 
             # ratings
             album_agg = artist.albums.aggregate(
+                total_length=Sum('total_length'),
                 count_rated=Sum('count_rated'),
                 count_played=Sum('count_played'),
                 rated_at=Max('rated_at'),
                 played_at=Max('played_at'),
             )
             song_agg = artist.songs.aggregate(
-                rating=Avg('rating'),
                 avg_played_at=Avg(RawSQL("strftime('%%s', played_at)", [])),
             )
 
-            artist.rating = song_agg['rating'] or 0
+            artist.total_length = album_agg['total_length'] or 0
+            artist.rating = get_artist_rating(artist, album_mean)
             artist.rated_at = album_agg['rated_at']
             artist.count_rated = album_agg['count_rated'] or 0
             artist.count_played = album_agg['count_played'] or 0
@@ -173,6 +202,9 @@ class Command(BaseCommand):
             artist.is_dirty = False
             artist.save(
                 update_fields=[
+                    'count_albums',
+                    'count_songs',
+                    'total_length',
                     'rating',
                     'rated_at',
                     'count_rated',
@@ -183,6 +215,4 @@ class Command(BaseCommand):
                 ]
             )
 
-            logger.debug(f'[{i}/{total}] Updated artist {artist.id}')
-
-        logger.info(f'Updated {total} artists.')
+        logger.info(f'🧹 Cleaned {total} artists: album_mean={album_mean:.3f}')

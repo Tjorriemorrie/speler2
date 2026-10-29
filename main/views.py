@@ -7,6 +7,7 @@ from curl_cffi.requests.exceptions import RequestException as CurlRequestExcepti
 from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
+from django.db.models import Max
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import patch_cache_control
@@ -17,7 +18,11 @@ from mutagen import MutagenError
 from main.constants import GENRE_CHOICES
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
-from main.lastfm_service import scrape_studio_albums, update_next_similar_artist
+from main.lastfm_service import (
+    get_recommended_song,
+    scrape_studio_albums,
+    update_next_similar_song,
+)
 from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, validate_songs, write_song_title
@@ -457,42 +462,40 @@ def similars_missing_albums_view(request):
 
 
 def similars_recommended_view(request):
-    """List new similar artists."""
-    ctx = {}
-    refresh = request.GET.get('refresh')
+    """Show the recommended song as stored, then (on refresh) after fetching the next song's."""
+    # the stored result renders straight away; its snippet then requests the refresh, so the
+    # slow last.fm call never holds up the page
+    refresh = bool(request.GET.get('refresh'))
+    if refresh:
+        update_next_similar_song()
+    # every fetch marks its seed song, even with zero results, so this moves on each update
+    updated_at = Song.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
+    ctx = {'recommended': get_recommended_song(), 'refreshed': refresh, 'updated_at': updated_at}
 
-    grouped_similar_key = 'sim_grouped_similar'
-    if refresh == 'gs' or not (grouped_similars := cache.get(grouped_similar_key)):
-        try:
-            grouped_similars = update_next_similar_artist()
-        except NotImplementedError as exc:
-            return HttpResponse(str(exc))
-        cache.set(grouped_similar_key, grouped_similars, timeout=3600 * 16)
-    ctx['grouped_similars'] = grouped_similars
-
-    response = render(request, 'main/snippet_similars_new_artists.html', ctx)
-    return response
+    logger.info(
+        f'🎵 Rendered recommended song: refreshed={refresh}, found={bool(ctx["recommended"])}, '
+        f'updated_at={updated_at}'
+    )
+    return render(request, 'main/snippet_similars_recommended.html', ctx)
 
 
-def similars_remove_artist(request, artist_slug):
-    """Remove a recommended artist by deleting all Similar records for the given slug."""
-    Similar.objects.filter(artist_slug=artist_slug).delete()
-    cache.delete('sim_grouped_similar')
+def similars_remove_song(request, artist_slug, track_slug):
+    """Remove a recommended song by deleting all its Similar records."""
+    deleted, _ = Similar.objects.filter(artist_slug=artist_slug, track_slug=track_slug).delete()
+    logger.info(
+        f'🗑️ Removed recommended song: artist_slug={artist_slug}, track_slug={track_slug}, '
+        f'deleted={deleted}'
+    )
     return similars_recommended_view(request)
 
 
 def similars_bad_albums(request):
-    """List bad artists for removal."""
-    ctx = {}
-    refresh = request.GET.get('refresh')
-
-    last_played_key = 'sim_last_played'
-    if refresh == 'lp' or not (last_played := cache.get(last_played_key)):
-        last_played = list_lowest_rated_albums()
-        cache.set(last_played_key, last_played, timeout=3600 * 16)
-    ctx['last_played'] = last_played
+    """List bad albums for removal."""
+    # not cached: the query is cheap, and cached albums outlive their rows once removed from disk
+    ctx = {'last_played': list_lowest_rated_albums()}
 
     response = render(request, 'main/snippet_similars_bad_albums.html', ctx)
+    logger.info(f'📉 Rendered bad albums: albums_count={len(ctx["last_played"])}')
     return response
 
 

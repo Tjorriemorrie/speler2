@@ -1,0 +1,101 @@
+{% load fmt %}
+
+<!-- Recommended song from lastfm similar tracks -->
+<h3 class="d-flex align-items-center gap-2">
+    Recommended song
+
+    <button class="btn btn-sm btn-outline-primary border-0 p-1"
+            title="Fetch similar songs for the next song"
+            hx-get="{% url 'similars_recommended' %}?refresh=1"
+            hx-trigger="click"
+            hx-target="#similars_recommended"
+            hx-swap="innerHTML"
+            hx-indicator="#similars_recommended_loader">
+        <i class="bi bi-arrow-clockwise"></i>
+    </button>
+
+    <!-- hidden until the refresh button's request is running -->
+    <span id="similars_recommended_loader"
+          class="spinner-border spinner-border-sm text-muted htmx-indicator"
+          title="Fetching similar songs for the next song"></span>
+
+    {% if not refreshed %}
+        <!-- stored result is shown first, then the next song's similars are fetched -->
+        <span class="spinner-border spinner-border-sm text-muted"
+              title="Fetching similar songs for the next song"
+              hx-get="{% url 'similars_recommended' %}?refresh=1"
+              hx-trigger="load"
+              hx-target="#similars_recommended"
+              hx-swap="innerHTML"></span>
+    {% endif %}
+</h3>
+
+{% if not recommended %}
+    <p>No recommendations yet.</p>
+{% else %}
+    <div class="d-flex align-items-start gap-2 mt-2">
+        <div class="flex-grow-1">
+            <h4 class="title-font mb-0">{{ recommended.track_name }}</h4>
+            <h5 class="artist-font"><em>{{ recommended.artist_name }}</em></h5>
+            <p class="text-muted small mb-0">
+                score {{ recommended.total_score|perc }}, from {{ recommended.count_songs }}
+                song{{ recommended.count_songs|pluralize }} of yours
+            </p>
+        </div>
+        <a class="no-blue"
+           title="Search {{ recommended.artist_name }} discography on Wikipedia"
+           href="https://www.wikipedia.org/w/index.php?search={{ recommended.artist_name|urlencode }} Discography"
+           target="_blank">
+            <i class="bi bi-wikipedia"></i>
+        </a>
+        <button class="btn btn-sm btn-outline-danger border-0 p-0"
+                title="Remove song"
+                hx-get="{% url 'similars_remove_song' recommended.artist_slug recommended.track_slug %}"
+                hx-target="#similars_recommended"
+                hx-swap="innerHTML"
+                hx-confirm="Remove {{ recommended.track_name }} from recommendations?">
+            <i class="bi bi-x-circle"></i>
+        </button>
+    </div>
+
+    <h6 class="mt-3">Similar to</h6>
+    <table class="table table-sm table-striped table-hover mt-1">
+        <thead>
+        <tr>
+            <th>Plays</th>
+            <th>Rating</th>
+            <th title="How similar last.fm rates the recommendation to this song">Match</th>
+            <th>Song</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for song in recommended.songs %}
+            <tr>
+                <td>{{ song.count_played }}</td>
+                <td class="small">
+                    <span class="text-muted">{{ song.count_rated }} @</span>
+                    {{ song.rating|perc }}
+                </td>
+                <td class="small">{{ song.match|perc }}</td>
+                <td>
+                    <a href="#" class="no-blue"
+                       hx-get="{% url 'album' song.album.id %}"
+                       hx-target="#main-container"
+                       hx-swap="innerHTML">
+                        {{ song.name }}
+                    </a>
+                    <span class="text-muted small">{{ song.artist.name }}</span>
+                </td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% endif %}
+
+{% if updated_at %}
+    <!-- changes on every refresh, so a finished update is visible even when the pick stays -->
+    {% now "Y-m-d" as today %}
+    <p class="text-muted mt-4 mb-0" style="font-size: 0.7rem;">
+        last updated: {% if updated_at|date:"Y-m-d" != today %}{{ updated_at|date:"j M" }} {% endif %}{{ updated_at|time:"H:i:s" }}
+    </p>
+{% endif %}

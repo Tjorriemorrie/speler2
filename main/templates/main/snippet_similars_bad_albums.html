@@ -6,7 +6,7 @@
 
     <button class="btn btn-sm btn-outline-primary border-0 p-1"
             title="Refresh"
-            hx-get="{% url 'similars_bad_albums' %}?refresh=lp"
+            hx-get="{% url 'similars_bad_albums' %}"
             hx-trigger="click"
             hx-target="#similars_bad_albums"
             hx-swap="innerHTML"
@@ -15,8 +15,8 @@
     </button>
 </h4>
 
-<h6>Albums that have the lowest ratings (and all songs were at least played
-    twice to give it a chance for a better rating).</h6>
+<h6>Albums that have the lowest ratings (struck through while any song has fewer than 2 plays
+    or 10 ratings, as it has not had a fair chance yet).</h6>
 
 {% if not last_played %}
     <p>No avg last played albums</p>
@@ -25,17 +25,24 @@
         <thead>
         <tr>
             <th>Rating</th>
+            <th>Artist</th>
             <th>Album</th>
-            <th>Avg played at</th>
-            <th>2nd Chance</th>
         </tr>
         </thead>
         <tbody>
         {% for album in last_played %}
-            <tr>
+            <tr{% if album.needs_more_chances %} class="text-decoration-line-through"{% endif %}>
                 <td class="small">
                     <span class="text-muted">{{ album.count_rated }} @</span>
                     {{ album.rating|perc }}
+                </td>
+                <td>
+                    <a href="#" class="no-blue"
+                       hx-get="{% url 'artist' album.artist.id %}"
+                       hx-target="#main-container"
+                       hx-swap="innerHTML">
+                        {{ album.artist.name }}
+                    </a>
                 </td>
                 <td>
                     <a href="#" class="no-blue"
@@ -47,16 +54,7 @@
                          src="{% url 'album_art' song_id=album.songs.first.id %}"/>
                         {{ album.name }}
                     </a>
-                    <br/>
-                    <a href="#" class="no-blue"
-                       hx-get="{% url 'artist' album.artist.id %}"
-                       hx-target="#main-container"
-                       hx-swap="innerHTML">
-                       ~ {{ album.artist.name }}
-                    </a>
                 </td>
-                <td>{{ album|played_at_over }}</td>
-                <td>{{ album|one_play_cnt }}</td>
             </tr>
         {% endfor %}
         </tbody>

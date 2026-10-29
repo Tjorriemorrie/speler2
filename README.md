@@ -7,9 +7,8 @@ music library player
 
 ## Why?
 
-Because streaming services sucks.
-
-You should own what you pay for. Paying for a service is a waste of money, like insurance.
+Because streaming services sucks. You should own what you pay for. Paying for a service is a waste
+of money, like insurance.
 
 This is an album-based player, where the UI is optimized for browsing full albums.
 
@@ -37,6 +36,10 @@ of the songs and how recently it was played. This way, songs you like are played
 it tries to avoid repeating the same artist within an hour. You can see in the log that it waits for
 a little time to pass before repeating the same artist (showing how many is still in the queue).
 
+A song's rating is its win ratio in those matches. Albums and artists use a bayesian average so one
+great single can't top the list: an album averages its songs, filled up to 10 with the library's
+mean song rating; an artist averages its albums, filled up to 3 with the mean album rating.
+
 <img src="scrn4.png" width="600">
 
 
@@ -48,11 +51,20 @@ LASTFM_API_KEY=
 LASTFM_SECRET=
 ```
 
-If you use that, it can also pull recommendations from last.fm:
+If you use that, the Similars page also recommends a song you don't own yet:
 
 <img src="scrn5.png" width="600">
 
-It also checks wikipedia for artist info if you have missed an album (beta).
+Each visit shows the stored pick, then asks last.fm `track.getSimilar` (top 50) about one more song
+(most played, then rating, then artist rating) and keeps its best 10 tracks you don't own. Score
+sums `rating × match` over the songs recommending it (top 10 by match listed), so can pass 100%.
+"Last updated" at the bottom is the latest fetch (newest `Song.similars_at`).
+Last.fm matches titles literally (curly `’` fails where `'` works); unknown tracks are `WSError` `'6'`.
+pylast fixes its timeout (5s connect, 10s read), so this fetch retries network errors 3×; scrobbles don't.
+
+It also checks wikipedia for artist info if you have missed an album (beta), and lists the lowest
+rated albums as removal candidates. An album is struck through while any song on it has fewer than
+2 plays or 10 ratings (not had a fair chance yet).
 
 
 ## How to use
@@ -73,22 +85,14 @@ Then just run it to scan for music file changes:
 python manage.py parsemusic
 ```
 
-Then run the server:
+Songs, albums and artists store their stats (counts, plays, ratings). Deleting a rating, play, song
+or album, or `parsemusic recheck` moving a song, marks the rows it leaves behind dirty: recalculate
+them with `python manage.py cleanstats`, or every row with `--all` (~40s for 9k songs).
 
-Extra: in my .PROFILE/.bachrc I have an alias to run the server quickly:
-
-```bash
-function speel {
-    cd "C:\Users\jacoj\code\speler2"
-    .\.venv\Scripts\activate
-    python manage.py runserver 0.0.0.0:8888
-}
-```
+Then run the server: `python manage.py runserver 0.0.0.0:8888` (my `.bashrc` has a `speel` function
+that cds into the repo, activates `.venv` and runs exactly that).
 
 ## Tech
 
 Django with HTMX. Previous version used React, but that is obsolete thanks to HTMX.
-
-## Contribute
-
-Do whatever you want.
+Contribute: do whatever you want.
