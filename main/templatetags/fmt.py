@@ -105,6 +105,8 @@ def days_ago(value):
     day = value.day  # Get the day without leading zero
     month = value.strftime('%b')  # Get the abbreviated month
     date_str = f'{day} {month}'  # Combine day and month
+    if delta.days > 360:
+        date_str = f"{month} '{value:%y}"
 
     three_months = 90
     if delta.days <= three_months:

@@ -57,15 +57,18 @@ If you use that, the Similars page also recommends a song you don't own yet:
 <img src="scrn5.png" width="600">
 
 Each visit shows the stored pick, then asks last.fm `track.getSimilar` (top 50) about one more song
-(most played, then rating, then artist rating) and keeps its best 10 tracks you don't own. Score
+and keeps its best 10 tracks you don't own. Only the top 10% of songs (most played, then rating,
+then artist rating) are asked; once all of them are done, the one asked longest ago is redone,
+replacing its tracks. Score
 sums `rating × match` over the songs recommending it (top 10 by match listed), so can pass 100%.
-"Last updated" at the bottom is the latest fetch (newest `Song.similars_at`).
+"Last updated" at the bottom is the latest fetch (newest `Song.similars_at`), with that song's
+place in the top 10% in brackets, e.g. `(156/987)`.
 Last.fm matches titles literally (curly `’` fails where `'` works); unknown tracks are `WSError` `'6'`.
 pylast fixes its timeout (5s connect, 10s read), so this fetch retries network errors 3×; scrobbles don't.
 
 It also checks wikipedia for artist info if you have missed an album (beta), and lists the lowest
 rated albums as removal candidates (8, one ratings window of slots). An album is struck through while
-any song on it has fewer than 3 plays or 15 ratings (not had a fair chance yet; 5 ratings per play).
+any song on it has fewer than 2 plays or 10 ratings (not had a fair chance yet; 5 ratings per play).
 Those songs get +1 play priority, so the list clears quickly; it is re-read every 30 minutes.
 
 

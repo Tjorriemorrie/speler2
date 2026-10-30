@@ -20,6 +20,7 @@ from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import (
     get_recommended_song,
+    get_similars_progress,
     scrape_studio_albums,
     update_next_similar_song,
 )
@@ -29,6 +30,8 @@ from main.musicfiles import get_album_art, validate_songs, write_song_title
 from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 from main.selectors import (
+    BAD_ALBUM_MIN_SONG_PLAYS,
+    BAD_ALBUM_MIN_SONG_RATINGS,
     get_albums_by_year_chart,
     get_albums_per_artist_chart,
     get_play_count_chart,
@@ -480,11 +483,16 @@ def similars_recommended_view(request):
         update_next_similar_song()
     # every fetch marks its seed song, even with zero results, so this moves on each update
     updated_at = Song.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
-    ctx = {'recommended': get_recommended_song(), 'refreshed': refresh, 'updated_at': updated_at}
+    ctx = {
+        'recommended': get_recommended_song(),
+        'refreshed': refresh,
+        'updated_at': updated_at,
+        'progress': get_similars_progress(),
+    }
 
     logger.info(
         f'🎵 Rendered recommended song: refreshed={refresh}, found={bool(ctx["recommended"])}, '
-        f'updated_at={updated_at}'
+        f'updated_at={updated_at}, progress={ctx["progress"]}'
     )
     return render(request, 'main/snippet_similars_recommended.html', ctx)
 
@@ -502,7 +510,11 @@ def similars_remove_song(request, artist_slug, track_slug):
 def similars_bad_albums(request):
     """List bad albums for removal."""
     # not cached: the query is cheap, and cached albums outlive their rows once removed from disk
-    ctx = {'last_played': list_lowest_rated_albums()}
+    ctx = {
+        'last_played': list_lowest_rated_albums(),
+        'min_song_plays': BAD_ALBUM_MIN_SONG_PLAYS,
+        'min_song_ratings': BAD_ALBUM_MIN_SONG_RATINGS,
+    }
 
     response = render(request, 'main/snippet_similars_bad_albums.html', ctx)
     logger.info(f'📉 Rendered bad albums: albums_count={len(ctx["last_played"])}')

@@ -127,6 +127,9 @@ without requiring the user to repeat the information later.
   rows, and only when `refreshed` is false carries an `hx-trigger="load"` element that re-requests
   the view with `?refresh=1`, which fetches one seed song. The refresh render must not carry the
   trigger again, or it loops. Reuse this for any other slow external call on page load.
+- Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of songs by `SIMILARS_SEED_ORDERING`
+  (ends in `id` so places are stable for the `n/total` progress). Never fetched goes first, then
+  the oldest `similars_at` is redone; a refetch deletes that seed's `Similar` rows first.
 - `Song.similars_at` marks a seed done even with zero results; the rows can't be the marker because
   removing a recommendation deletes them. Last.fm "Track not found" (`WSError` status `'6'`, a
   string) is final; any other `PyLastError` (5xx carry an int status) leaves the song for retry.

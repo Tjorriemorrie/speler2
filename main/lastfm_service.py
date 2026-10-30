@@ -1,5 +1,6 @@
 import datetime
 import logging
+import math
 import re
 import string
 import unicodedata
@@ -28,7 +29,10 @@ SIMILARS_KEEP_LIMIT = 10
 # retrying; a scrobble keeps its single attempt, since playback waits on it
 SIMILARS_FETCH_ATTEMPTS = 3
 # order in which songs are fetched as seeds and listed as recommenders
-SIMILARS_SEED_ORDERING = ('-count_played', '-rating', '-artist__rating')
+# id breaks ties, so a song keeps its place in the progress count between renders
+SIMILARS_SEED_ORDERING = ('-count_played', '-rating', '-artist__rating', 'id')
+# only the top decile of songs are seeds; once all are fetched they are refetched oldest first
+SIMILARS_SEED_SHARE = 0.1
 SIMILARS_SONGS_SHOWN = 10
 
 
@@ -114,20 +118,43 @@ def _get_similar_tracks(track: pylast.Track) -> list[pylast.SimilarItem]:
         return similar_tracks
 
 
+def _get_seed_ids() -> list[int]:
+    """Ids of the seed songs: the top decile of the library, best first."""
+    limit = math.ceil(Song.objects.count() * SIMILARS_SEED_SHARE)
+    return list(
+        Song.objects.order_by(*SIMILARS_SEED_ORDERING).values_list('id', flat=True)[:limit]
+    )
+
+
+def get_similars_progress() -> tuple[int, int] | None:
+    """Place of the latest fetched seed among the seeds, and how many seeds there are."""
+    seed_ids = _get_seed_ids()
+    latest_id = (
+        Song.objects.filter(id__in=seed_ids, similars_at__isnull=False)
+        .order_by('-similars_at')
+        .values_list('id', flat=True)
+        .first()
+    )
+    if latest_id is None:
+        return None
+    return seed_ids.index(latest_id) + 1, len(seed_ids)
+
+
 def update_next_similar_song():
-    """Store the best similar tracks not owned yet for the next song that has none fetched."""
+    """Store the best similar tracks not owned yet for the seed song fetched longest ago."""
     if not settings.LASTFM_ENABLE:
         logger.info('🎵 LastFM disabled, not updating similar songs')
         return
 
+    # never fetched comes first, best seed first; after that the oldest fetch is redone
     seed = (
-        Song.objects.filter(similars_at__isnull=True)
+        Song.objects.filter(id__in=_get_seed_ids())
         .select_related('artist')
-        .order_by(*SIMILARS_SEED_ORDERING)
+        .order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
         .first()
     )
     if not seed:
-        logger.info('🎵 Every song has similars fetched, nothing to update')
+        logger.info('🎵 No songs in the library, nothing to update')
         return
 
     seed_artist = straighten_quotes(seed.artist.name)
@@ -185,13 +212,16 @@ def update_next_similar_song():
         if len(similars) == SIMILARS_KEEP_LIMIT:
             break
 
+    # a refetch replaces the seed's previous tracks rather than adding to them
     with transaction.atomic():
+        count_replaced, _ = Similar.objects.filter(song=seed).delete()
         Similar.objects.bulk_create(similars)
         seed.similars_at = now
         seed.save(update_fields=['similars_at'])
     logger.info(
         f'🎵 Similar songs updated: song_id={seed.id}, artist={seed_artist}, title={seed_title}, '
-        f'fetched={len(tracks)}, skipped={count_skipped}, saved={len(similars)}'
+        f'fetched={len(tracks)}, skipped={count_skipped}, saved={len(similars)}, '
+        f'replaced={count_replaced}'
     )
 
 

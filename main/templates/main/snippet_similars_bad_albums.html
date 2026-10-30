@@ -15,8 +15,8 @@
     </button>
 </h4>
 
-<h6>Albums that have the lowest ratings (struck through while any song has fewer than 3 plays
-    or 15 ratings, as it has not had a fair chance yet; those songs get a play priority boost).</h6>
+<h6>Albums that have the lowest ratings (struck through while any song has fewer than {{ min_song_plays }} plays
+    or {{ min_song_ratings }} ratings, as it has not had a fair chance yet; those songs get a play priority boost).</h6>
 
 {% if not last_played %}
     <p>No avg last played albums</p>
@@ -27,16 +27,14 @@
             <th>Rating</th>
             <th>Artist</th>
             <th>Album</th>
+            <th title="Plays (p) and ratings (r) left before every song has had a fair chance">Left</th>
         </tr>
         </thead>
         <tbody>
         {% for album in last_played %}
-            <tr{% if album.needs_more_chances %} class="text-decoration-line-through"{% endif %}>
-                <td class="small">
-                    <span class="text-muted">{{ album.count_rated }} @</span>
-                    {{ album.rating|perc }}
-                </td>
-                <td>
+            <tr>
+                <td class="small{% if album.needs_more_chances %} text-decoration-line-through{% endif %}">{{ album.rating|perc:1 }}</td>
+                <td{% if album.needs_more_chances %} class="text-decoration-line-through"{% endif %}>
                     <a href="#" class="no-blue"
                        hx-get="{% url 'artist' album.artist.id %}"
                        hx-target="#main-container"
@@ -44,7 +42,7 @@
                         {{ album.artist.name }}
                     </a>
                 </td>
-                <td>
+                <td{% if album.needs_more_chances %} class="text-decoration-line-through"{% endif %}>
                     <a href="#" class="no-blue"
                        hx-get="{% url 'album' album.id %}"
                        hx-target="#main-container"
@@ -55,6 +53,7 @@
                         {{ album.name }}
                     </a>
                 </td>
+                <td class="small">{% if album.plays_left %}{{ album.plays_left }}p{% endif %}{% if album.plays_left and album.ratings_left %} {% endif %}{% if album.ratings_left %}{{ album.ratings_left }}r{% endif %}</td>
             </tr>
         {% endfor %}
         </tbody>

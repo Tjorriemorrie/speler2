@@ -32,6 +32,7 @@ from main.selectors import (
     upkeep_album,
     upkeep_artist,
 )
+from main.templatetags.fmt import days_ago
 from main.views import (
     similars_bad_albums,
     similars_bad_artists,
@@ -200,13 +201,22 @@ def _make_album(slug: str, rating: float, songs: list[tuple[int, int]]) -> Album
 
 def test_lowest_rated_albums_flags_albums_with_a_song_lacking_plays_or_ratings(db):
     """One song short on plays or ratings flags its album, which is still listed."""
-    _make_album('rated', rating=0.4, songs=[(3, 15), (5, 17)])
-    _make_album('few-plays', rating=0.1, songs=[(3, 15), (2, 17)])
-    _make_album('few-ratings', rating=0.2, songs=[(3, 14), (5, 17)])
+    _make_album('rated', rating=0.4, songs=[(3, 10), (5, 17)])
+    _make_album('few-plays', rating=0.1, songs=[(3, 10), (1, 17)])
+    _make_album('few-ratings', rating=0.2, songs=[(3, 9), (5, 17)])
 
     flags = [(album.slug, album.needs_more_chances) for album in list_lowest_rated_albums()]
 
     assert flags == [('few-plays', True), ('few-ratings', True), ('rated', False)]
+
+
+def test_lowest_rated_albums_sum_the_plays_and_ratings_left(db):
+    """Each song adds what it is short of either minimum, and nothing once past it."""
+    _make_album('short', rating=0.1, songs=[(0, 4), (1, 12)])
+
+    album = list_lowest_rated_albums()[0]
+
+    assert (album.plays_left, album.ratings_left) == (3, 6)
 
 
 def test_similars_bad_albums_drops_album_removed_since_last_render(rf, db):
@@ -546,10 +556,44 @@ def test_update_similars_gives_up_after_network_errors(lastfm, seed_songs, caplo
     assert 'api-secret' not in caplog.text
 
 
-def test_update_similars_without_seed_skips_lastfm(lastfm, seed_songs):
-    """Nothing is fetched once every song has its similars."""
-    Song.objects.update(similars_at=timezone.now())
+def test_update_similars_seeds_only_top_decile(lastfm, seed_songs):
+    """A song outside the top decile is never fetched, the fetched top song is redone instead."""
+    top, _ = seed_songs
+    top.similars_at = timezone.now()
+    top.save()
+    lastfm.get_track.return_value.get_similar.return_value = []
 
+    update_next_similar_song()
+
+    lastfm.get_track.assert_called_once_with('Seed Artist', "Top Song's")
+
+
+def test_update_similars_refetches_oldest_seed(lastfm, seed_songs, monkeypatch):
+    """Once every seed is fetched, the one fetched longest ago is fetched again."""
+    monkeypatch.setattr('main.lastfm_service.SIMILARS_SEED_SHARE', 1)
+    _, low = seed_songs
+    Song.objects.update(similars_at=timezone.now())
+    Song.objects.filter(id=low.id).update(similars_at=timezone.now() - timedelta(days=1))
+    lastfm.get_track.return_value.get_similar.return_value = []
+
+    update_next_similar_song()
+
+    lastfm.get_track.assert_called_once_with('Seed Artist', 'Low Song')
+
+
+def test_update_similars_refetch_replaces_old_tracks(lastfm, seed_songs):
+    """A refetch drops the seed's previous tracks instead of adding duplicates."""
+    top, _ = seed_songs
+    _make_similar(top, 'New Band', 'Hit', 0.3)
+    lastfm.get_track.return_value.get_similar.return_value = [_similar_item('New Band', 'Hit', 0.5)]
+
+    update_next_similar_song()
+
+    assert list(Similar.objects.values_list('match', flat=True)) == [0.5]
+
+
+def test_update_similars_empty_library_skips_lastfm(lastfm, db):
+    """Nothing is fetched without songs."""
     update_next_similar_song()
 
     lastfm.get_track.assert_not_called()
@@ -625,6 +669,18 @@ def test_recommended_view_shows_last_updated(mock_update, rf, seed_songs, days_a
     response = similars_recommended_view(rf.get('/similars/recommended/'))
 
     assert f'last updated: {shown.format(similars_at)}' in response.content.decode('utf-8')
+
+
+@patch('main.views.update_next_similar_song', autospec=True)
+def test_recommended_view_shows_progress(mock_update, rf, seed_songs, monkeypatch):
+    """The latest fetched seed's place among the seeds is shown next to the time."""
+    monkeypatch.setattr('main.lastfm_service.SIMILARS_SEED_SHARE', 1)
+    _, low = seed_songs
+    Song.objects.filter(id=low.id).update(similars_at=timezone.now() + timedelta(seconds=1))
+
+    response = similars_recommended_view(rf.get('/similars/recommended/'))
+
+    assert '(2/3)' in response.content.decode('utf-8')
 
 
 @patch('main.views.update_next_similar_song', autospec=True)
@@ -812,8 +868,8 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     with caplog.at_level('INFO', logger='main.plays'):
         get_next_song()
 
-    # backlog of 1 over 1 slot, less the 3 spaces per artist
-    assert any('[-2.00]' in m for m in caplog.messages)
+    # backlog of 1 over 1 slot, less the 5 spaces per artist
+    assert any('-> -4.00' in m for m in caplog.messages)
 
 
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
@@ -831,17 +887,17 @@ def test_countdown_grows_while_falling(catalog):
 
 def test_bumps_only_the_bad_album_song_short_of_a_fair_chance(db):
     """Both albums are listed as bad, but only the song short of ratings is bumped."""
-    _make_song('fair', rating=0.9, count_played=3, count_rated=15, days_ago=10)
-    short = _make_song('short', rating=0.5, count_played=3, count_rated=14, days_ago=10)
+    _make_song('fair', rating=0.9, count_played=3, count_rated=10, days_ago=10)
+    short = _make_song('short', rating=0.5, count_played=3, count_rated=9, days_ago=10)
 
     assert get_next_song() == short
 
 
 def test_bad_albums_are_held_for_the_ratings_window(db):
     """An album missing from the cached list is not bumped until the list expires."""
-    fair = _make_song('fair', rating=0.9, count_played=3, count_rated=15, days_ago=10)
+    fair = _make_song('fair', rating=0.9, count_played=3, count_rated=10, days_ago=10)
     get_next_song()
-    _make_song('short', rating=0.5, count_played=3, count_rated=14, days_ago=10)
+    _make_song('short', rating=0.5, count_played=3, count_rated=9, days_ago=10)
 
     assert get_next_song() == fair
 
@@ -1246,3 +1302,11 @@ def test_scrobble_swallows_lastfm_server_error(mock_network, settings, editable_
     history = History.objects.create(song=editable_song, played_at=timezone.now())
 
     scrobble(history)
+
+
+@pytest.mark.parametrize(('days', 'shown'), [(360, '{0.day} {0:%b}'), (400, "{0:%b '%y}")])
+def test_days_ago_shows_month_and_year_after_360_days(days, shown):
+    """Plays older than 360 days show the month and year instead of the day and month."""
+    value = timezone.localtime() - timedelta(days=days)
+
+    assert days_ago(value).endswith(f'({shown.format(value)})')

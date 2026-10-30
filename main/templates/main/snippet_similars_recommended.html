@@ -96,6 +96,6 @@
     <!-- changes on every refresh, so a finished update is visible even when the pick stays -->
     {% now "Y-m-d" as today %}
     <p class="text-muted mt-4 mb-0" style="font-size: 0.7rem;">
-        last updated: {% if updated_at|date:"Y-m-d" != today %}{{ updated_at|date:"j M" }} {% endif %}{{ updated_at|time:"H:i:s" }}
+        last updated: {% if updated_at|date:"Y-m-d" != today %}{{ updated_at|date:"j M" }} {% endif %}{{ updated_at|time:"H:i:s" }}{% if progress %} ({{ progress.0 }}/{{ progress.1 }}){% endif %}
     </p>
 {% endif %}

@@ -16,9 +16,10 @@ from django.db.models import (
     Q,
     QuerySet,
     Sum,
+    Value,
 )
 from django.db.models.expressions import RawSQL
-from django.db.models.functions import TruncDate, TruncWeek
+from django.db.models.functions import Greatest, TruncDate, TruncWeek
 from django.utils import timezone
 from django.utils.timezone import make_aware
 
@@ -29,8 +30,8 @@ logger = logging.getLogger(__name__)
 
 DAILY_TO_WEEKLY_THRESHOLD_DAYS = 365
 # a bad album with any song below these has not had a fair chance yet, so it is struck through
-BAD_ALBUM_MIN_SONG_PLAYS = 3
-BAD_ALBUM_MIN_SONG_RATINGS = 15
+BAD_ALBUM_MIN_SONG_PLAYS = 2
+BAD_ALBUM_MIN_SONG_RATINGS = 10
 
 
 def get_play_count_chart():
@@ -282,6 +283,13 @@ def list_lowest_rated_albums() -> List[Album]:
         Album.objects.annotate(
             min_song_plays=Min('songs__count_played'),
             min_song_ratings=Min('songs__count_rated'),
+            # how far the songs together are short of a fair chance
+            plays_left=Sum(
+                Greatest(BAD_ALBUM_MIN_SONG_PLAYS - F('songs__count_played'), Value(0))
+            ),
+            ratings_left=Sum(
+                Greatest(BAD_ALBUM_MIN_SONG_RATINGS - F('songs__count_rated'), Value(0))
+            ),
         )
         .annotate(
             needs_more_chances=ExpressionWrapper(
