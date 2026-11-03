@@ -19,6 +19,16 @@ without requiring the user to repeat the information later.
 3. Touch only what you must. Clean up only your own mess.
 4. Define success criteria. Loop until verified.
 
+## Git
+
+- **Commit and push when the work is done**, after the full suite passes - don't wait to be asked.
+  Work on `main` and push to `origin/main`.
+- If the change revises the last developed change (a fix or follow-up to what the previous commit
+  introduced), amend that commit (`git commit --amend`) and push with `--force-with-lease`
+  instead of adding a new commit. Anything unrelated gets its own commit.
+- Leave nothing uncommitted: changes that aren't yours (the user's own edits, earlier sessions)
+  get committed too, as their own commit with a message describing them, not folded into yours.
+
 ## Testing
 
 - **pytest only.** Run the suite with `python -m pytest`. Never `manage.py test` - the Django
