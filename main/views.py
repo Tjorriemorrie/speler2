@@ -27,7 +27,7 @@ from main.lastfm_service import (
 )
 from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
-from main.musicfiles import get_album_art, validate_songs, write_song_title
+from main.musicfiles import get_album_art, write_song_title
 from main.plays import get_next_song, handle_genre_filter, set_genre, set_played
 from main.ratings import get_match, set_match_result
 from main.selectors import (
@@ -99,10 +99,13 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     if not next_song:
         next_song = get_next_song()
 
-    # check audio exists
-    if not next_song.file_exists():
-        validate_songs()
-        next_song = get_next_song()
+    # skip songs whose file is gone (e.g. moved mid-reorganise) without validating: that
+    # would delete them, with their stats, before a rescan finds them at the new path
+    skipped = []
+    while not next_song.file_exists():
+        logger.warning(f'⚠️ Next song: file missing, skipping {next_song}: {next_song.rel_path}')
+        skipped.append(next_song)
+        next_song = get_next_song(exclude_ids=[song.id for song in skipped])
 
     # store for matches and history
     request.session['song_id'] = next_song.id
@@ -120,6 +123,7 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
 
     ctx = {
         'song': next_song,
+        'skipped': skipped,
         'filter_value': filter_value,
         'genre_values': genre_values,
     }

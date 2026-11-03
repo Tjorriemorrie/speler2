@@ -853,6 +853,13 @@ def catalog(db):
     }
 
 
+def test_never_picks_excluded_songs(catalog):
+    """Excluded ids (e.g. songs whose file is missing) are not candidates."""
+    _play(catalog['history'], 1)
+
+    assert get_next_song(exclude_ids=[catalog['played'].id]) != catalog['played']
+
+
 def test_skips_new_songs_while_history_is_short(catalog):
     """A played song is picked over the higher priority unplayed ones."""
     _play(catalog['history'], 1)
@@ -1391,6 +1398,19 @@ def test_next_song_ignores_previous_song_on_refresh(
         client.get(reverse('next_song'), {'refresh': '1'})
 
     mock_played.assert_not_called()
+
+
+@patch('main.views.get_next_song', autospec=True)
+def test_next_song_skips_missing_file_without_validating(mock_next, client, catalog):
+    """A song whose file is gone is skipped and named in a warning, not deleted."""
+    missing, present = catalog['new'], catalog['played']
+    mock_next.side_effect = [missing, present]
+    with patch('main.views.Song.file_exists', autospec=True, side_effect=lambda s: s == present):
+        response = client.get(reverse('next_song'), {'refresh': '1'})
+
+    mock_next.assert_called_with(exclude_ids=[missing.id])
+    assert 'audio file not found' in response.content.decode()
+    assert Song.objects.filter(id=missing.id).exists()
 
 
 # scrobble: last.fm outages

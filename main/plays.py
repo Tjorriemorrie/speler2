@@ -3,7 +3,7 @@ import math
 import random
 from collections import defaultdict
 from datetime import datetime, timedelta
-from typing import Tuple, Union
+from typing import Iterable, Tuple, Union
 
 import numpy as np
 import simpleaudio as sa
@@ -66,8 +66,8 @@ COUNTDOWN_WINDOW = 11
 COUNTDOWN_MIN_WINDOW = 2
 
 
-def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
-    """Get next song to play."""
+def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PLR0915
+    """Get next song to play, never one of `exclude_ids`."""
     max_played, time_till_last_played = get_next_song_priority_values()
 
     # Calculate time since played using raw SQL
@@ -75,7 +75,7 @@ def get_next_song() -> Song:  # noqa: PLR0912, PLR0915
         "(julianday('now') - julianday(COALESCE(main_song.played_at, '1982-08-04')))", []
     )
 
-    query = Song.objects
+    query = Song.objects.exclude(id__in=exclude_ids)
 
     # filter on facet
     if filter_facet := cache.get('filter_facet'):

@@ -108,6 +108,13 @@ without requiring the user to repeat the information later.
   from `home.html`, which sends `?refresh=1`. A new path that loads the player without the user
   moving on must send `refresh` too.
 
+## Missing audio files
+
+- Request paths never call `validate_songs()`: its default `delete=True` drops every song whose
+  file is missing, with its stats, and files go missing while the user is moving them. The player
+  skips such a song (`get_next_song(exclude_ids=...)`), logs it and shows a warning; pruning is
+  left to the explicit scan/cleanup commands.
+
 ## Play priority
 
 - Bad albums get their fair chance through the play queue: `get_next_song` adds `weight_bad_album`
