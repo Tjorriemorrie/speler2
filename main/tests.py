@@ -527,10 +527,10 @@ def test_update_similars_queries_best_seed_with_straight_quotes(lastfm, seed_son
 
 
 def test_update_similars_saves_only_new_tracks(lastfm, seed_songs):
-    """Owned (accents, quotes and brackets aside), repeated and unsluggable tracks are skipped."""
+    """Owned artists (accents aside), repeated and unsluggable tracks are skipped."""
     top, _ = seed_songs
     lastfm.get_track.return_value.get_similar.return_value = [
-        _similar_item('Maneskin', "Beggin'", 1.0),
+        _similar_item('Maneskin', 'Not Owned Song', 1.0),
         _similar_item('New Band', 'Hit', 0.5),
         _similar_item('New Band', 'Hit (Remastered)', 0.4),
         _similar_item('Tool', '(-)', 0.3),
@@ -688,10 +688,10 @@ def test_recommended_song_sums_scores_across_songs(seed_songs):
     assert [song.match for song in recommended['songs']] == [0.4, 0.3]
 
 
-def test_recommended_song_drops_track_added_to_library(seed_songs):
-    """A track whose album was added since it was fetched is deleted, the next one is shown."""
+def test_recommended_song_drops_artist_added_to_library(seed_songs):
+    """An artist added since it was fetched is deleted, the next one is shown."""
     top, _ = seed_songs
-    _make_similar(top, 'Maneskin', "Beggin'", 0.9)
+    _make_similar(top, 'Maneskin', 'Not Owned Song', 0.9)
     _make_similar(top, 'New Band', 'Hit', 0.3)
 
     recommended = get_recommended_song()

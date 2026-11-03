@@ -72,10 +72,7 @@
         {% for song in recommended.songs %}
             <tr>
                 <td>{{ song.count_played }}</td>
-                <td class="small">
-                    <span class="text-muted">{{ song.count_rated }} @</span>
-                    {{ song.rating|perc }}
-                </td>
+                <td class="small">{{ song.rating|perc }}</td>
                 <td class="small">{{ song.match|perc }}</td>
                 <td>
                     <a href="#" class="no-blue"

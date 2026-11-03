@@ -52,6 +52,11 @@ table {
     font-family: Tahoma, 'Helvetica Neue', Arial, sans-serif;
 }
 
+/* three columns side by side wrap too much at the normal size; zoom scales the rem headings too */
+.similars-page {
+    zoom: 0.85;
+}
+
 .ellipsis {
     max-width: 20em;
     white-space: nowrap;

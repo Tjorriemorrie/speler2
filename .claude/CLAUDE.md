@@ -158,6 +158,9 @@ without requiring the user to repeat the information later.
 - `Song.similars_at` marks a seed done even with zero results; the rows can't be the marker because
   removing a recommendation deletes them. Last.fm "Track not found" (`WSError` status `'6'`, a
   string) is final; any other `PyLastError` (5xx carry an int status) leaves the song for retry.
+- Recommended songs are only by artists not in the library: owned artists are skipped on save and
+  their rows deleted on render if the artist was added since. Owned artists are covered by "more
+  from artist" instead.
 - Matching to the library is by `artist_slug` (= `Artist.slug`, `slugify(unidecode())`) plus
   `track_slug` (same, bracketed suffixes dropped). Never compare raw names.
 - Scrobbling blocks playback, so it gets one attempt at pylast's default timeout; the similars

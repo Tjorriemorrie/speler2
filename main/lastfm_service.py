@@ -22,7 +22,7 @@ from main.models import Artist, History, Similar, Song
 
 logger = logging.getLogger(__name__)
 
-# fetch enough similar tracks that the best 10 not already owned are left after filtering
+# fetch enough similar tracks that the best 10 by new artists are left after filtering
 SIMILARS_FETCH_LIMIT = 50
 SIMILARS_KEEP_LIMIT = 10
 # pylast fixes its timeout (5s connect, 10s read) for every call, so the fetch gets more time by
@@ -85,6 +85,13 @@ def track_slug(name: str) -> str:
 def straighten_quotes(text: str) -> str:
     """Replace curly apostrophes, which last.fm does not match to straight ones."""
     return text.replace('’', "'").replace('‘', "'")
+
+
+def _owned_artists(artist_slugs: set[str]) -> set[str]:
+    """Get the slugs of these artists that are in the library."""
+    owned = set(Artist.objects.filter(slug__in=artist_slugs).values_list('slug', flat=True))
+    logger.info(f'🎵 Listed owned artists: artists_count={len(artist_slugs)}, owned={len(owned)}')
+    return owned
 
 
 def _owned_tracks(artist_slugs: set[str]) -> set[tuple[str, str]]:
@@ -184,18 +191,20 @@ def update_next_similar_song():
     tracks = [
         (similar.item.artist.name, similar.item.title, similar.match) for similar in similar_tracks
     ]
-    # owned tracks are skipped, and so are repeats that slug the same (e.g. a live version)
-    skip = _owned_tracks({artist_slug(name) for name, _, _ in tracks})
+    # only artists not in the library are recommended, owned ones get "more from artist"
+    owned_artists = _owned_artists({artist_slug(name) for name, _, _ in tracks})
+    # repeats that slug the same (e.g. a live version) are skipped
+    seen = set()
     count_skipped = 0
     now = timezone.now()
     similars = []
     for track_artist, track_name, match in tracks:
         key = (artist_slug(track_artist), track_slug(track_name))
         # an empty slug (e.g. a title only in brackets) cannot be put in the remove url
-        if not all(key) or key in skip:
+        if not all(key) or key[0] in owned_artists or key in seen:
             count_skipped += 1
             continue
-        skip.add(key)
+        seen.add(key)
         similars.append(
             Similar(
                 song=seed,
@@ -238,15 +247,13 @@ def get_recommended_song() -> dict | None:
         .order_by('-total_score')
     )
     for best in ranked:
-        # its album may have been added to the library since it was fetched
-        if (best['artist_slug'], best['track_slug']) not in _owned_tracks({best['artist_slug']}):
+        # the artist may have been added to the library since it was fetched
+        if not _owned_artists({best['artist_slug']}):
             break
-        deleted, _ = Similar.objects.filter(
-            artist_slug=best['artist_slug'], track_slug=best['track_slug']
-        ).delete()
+        deleted, _ = Similar.objects.filter(artist_slug=best['artist_slug']).delete()
         logger.info(
-            f'🎵 Dropped recommendation now in library: artist={best["artist_name"]}, '
-            f'track={best["track_name"]}, deleted={deleted}'
+            f'🎵 Dropped recommendations of artist now in library: '
+            f'artist={best["artist_name"]}, deleted={deleted}'
         )
     else:
         logger.info('🎵 No recommended song yet')
