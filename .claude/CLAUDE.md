@@ -156,10 +156,11 @@ without requiring the user to repeat the information later.
   owned) wins: only that album is shown, with that song plus its next best stand-out tracks, 3 in
   all. If every checked song is on an owned album, those songs are listed with their albums. A
   song last.fm puts on no album, or on one under `MIN_ALBUM_TRACKS` (4: last.fm often files a hit
-  under its single), uses up a check but isn't listed. Stand-out tracks are the unowned
-  tracks above the album's mean last.fm playcount (`get_stand_out_tracks`). Use the mean, not
-  mean + stdev: playcounts are skewed so hard that the stdev leaves only the hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no
-  longer wired to a view.
+  under its single), uses up a check but isn't listed. Stand-out tracks are the best
+  `STAND_OUT_TRACKS_SHARE` (a quarter, rounded up: 3 of a usual 12) of the album's tracks by
+  last.fm playcount, without the owned ones (`get_stand_out_tracks`). A fixed share, not a
+  cutoff: the mean let 6 through on albums with weak deep cuts, and mean + stdev leaves only the
+  hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no longer wired to a view.
 - "Recommended album" (`similars.py`): last.fm has no similar-albums endpoint, so each seed
   artist stores its similar artists (one `artist.getSimilar` call, up to 50, one page) as
   `Similar` rows scored artist rating × match. Seeds are artists, not albums: albums by one

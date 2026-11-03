@@ -1,6 +1,6 @@
 import datetime
 import logging
-from statistics import mean
+import math
 
 from django.db.models import F
 from django.utils import timezone
@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 
 # top tracks only give the play counts; an album track missing from them counts as 0
 ARTIST_TOP_TRACKS_LIMIT = 200
-ARTIST_ALBUM_TRACKS_SHOWN = 6
+# the best quarter of an album's tracks are its stand-outs (3 of a usual 12)
+STAND_OUT_TRACKS_SHARE = 0.25
 # the best missing songs whose album is looked up, and listed when all are on owned albums
 MISSING_SONGS_CHECKED = 3
 # fewer tracks is a single or an EP, not an album worth suggesting
@@ -57,21 +58,20 @@ def get_stand_out_tracks(
     playcounts: dict[str, int],
     owned: set[str],
 ) -> list[dict]:
-    """Get the album's tracks played more than its mean, best first, without the owned slugs."""
+    """Get the best quarter of the album's tracks, best first, without the owned slugs."""
     tracks = {}
     for track_name in track_names:
         tracks.setdefault(track_slug(track_name), track_name)
-    # last.fm counts are skewed to the hits, so the mean leaves the few stand-out tracks
-    cutoff = mean(playcounts.get(slug, 0) for slug in tracks) if tracks else 0
+    shown = math.ceil(len(tracks) * STAND_OUT_TRACKS_SHARE)
     kept = sorted(
         (
             {'name': track_name, 'playcount': playcounts.get(slug, 0)}
             for slug, track_name in tracks.items()
-            if playcounts.get(slug, 0) > cutoff and slug not in owned
+            if slug not in owned
         ),
         key=lambda track: track['playcount'],
         reverse=True,
-    )[:ARTIST_ALBUM_TRACKS_SHOWN]
+    )[:shown]
     logger.info(
         f'🎵 Picked album tracks: artist={artist_name}, album={album_title}, '
         f'tracks={len(tracks)}, kept={len(kept)}'
