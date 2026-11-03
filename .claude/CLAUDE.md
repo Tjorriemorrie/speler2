@@ -101,6 +101,12 @@ without requiring the user to repeat the information later.
   `musicfiles.write_song_title`, then save the model. Any future field made editable must keep
   that file-then-db order, otherwise a failed write silently desyncs the two.
 
+## Album art
+
+- `album_art_view` caches the embedded art in `ALBUMS_DIR` and serves that copy only while it is
+  newer than the requested song's audio file; browsers get `no-cache` + `Last-Modified` (the
+  file's mtime) and revalidate. New art comes in by retagging the file, not via `recheckmetadata`.
+
 ## Play counting
 
 - `next_song_view` counts the session's previous song as played on every request (song ended,

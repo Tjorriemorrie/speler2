@@ -1,3 +1,4 @@
+import os
 from datetime import timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
@@ -475,6 +476,48 @@ def test_recheck_metadata_keeps_songs_whose_file_moved(editable_song, settings, 
     recheck_metadata()
 
     assert Song.objects.filter(id=editable_song.id).exists()
+
+
+@pytest.fixture()
+def cached_art(song_file, settings, tmp_path):
+    """The song's album art cached as b'old'."""
+    settings.ALBUMS_DIR = tmp_path
+    album = song_file.album
+    path = tmp_path / f'{album.artist.slug}-{album.slug}-{album.id}.jpg'
+    path.write_bytes(b'old')
+    return path
+
+
+@patch('main.views.get_album_art', return_value=SimpleNamespace(data=b'new'))
+def test_album_art_reextracts_art_cached_before_the_file_changed(mock_art, client, cached_art):
+    """New art written into the tags replaces the cached copy."""
+    os.utime(cached_art, (0, 0))
+
+    response = client.get(reverse('album_art', kwargs={'song_id': Song.objects.get().id}))
+
+    assert response.content == b'new'
+
+
+def test_album_art_serves_the_cache_when_the_file_is_missing(client, cached_art):
+    """A moved file, not yet scanned, keeps its cached art."""
+    song = Song.objects.get()
+    song.file_path().unlink()
+
+    response = client.get(reverse('album_art', kwargs={'song_id': song.id}))
+
+    assert response.content == b'old'
+
+
+def test_album_art_not_modified_since_the_file_changed(client, cached_art):
+    song = Song.objects.get()
+    response = client.get(reverse('album_art', kwargs={'song_id': song.id}))
+
+    response = client.get(
+        reverse('album_art', kwargs={'song_id': song.id}),
+        HTTP_IF_MODIFIED_SINCE=response['Last-Modified'],
+    )
+
+    assert response.status_code == 304
 
 
 # similar songs: fetching from last.fm and recommending

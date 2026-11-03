@@ -1,6 +1,5 @@
 import logging
 import re
-from pathlib import Path
 
 import requests
 from curl_cffi.requests.exceptions import RequestException as CurlRequestException
@@ -10,7 +9,8 @@ from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Max
 from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
-from django.utils.cache import patch_cache_control
+from django.utils.cache import get_conditional_response, patch_cache_control
+from django.utils.http import http_date
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 from mutagen import MutagenError
@@ -179,33 +179,40 @@ def next_rating_view(request: WSGIRequest):
 
 
 def album_art_view(request, song_id):
-    """Return album art from static directory if exists, otherwise extract from ID3."""
+    """Return album art from static directory if exists, otherwise extract from ID3.
+
+    New art arrives by rewriting the audio file's tags, so the cached copy is only used while it
+    is newer than the file, and browsers revalidate against the file's mtime.
+    """
     song = get_object_or_404(Song, id=song_id)
     album = song.album
+
+    # a missing file (moved, not yet scanned) keeps the cached copy
+    try:
+        file_mtime = int(song.file_path().stat().st_mtime)
+    except FileNotFoundError:
+        file_mtime = 0
+    not_modified = get_conditional_response(request, last_modified=file_mtime or None)
+    if not_modified:
+        return not_modified
 
     # Define path to album art in the static directory
     album_art_path = settings.ALBUMS_DIR / f'{album.artist.slug}-{album.slug}-{album.id}.jpg'
 
-    # Check if album art already exists in the static directory
-    if album_art_path.exists():
-        with Path.open(album_art_path, 'rb') as art_file:
-            response = HttpResponse(art_file.read(), content_type='image/jpeg')
-            # Add cache headers to the response (e.g., cache for 1 day)
-            patch_cache_control(response, public=True, max_age=86400)  # 86400 seconds = 1 day
-            return response
+    if album_art_path.exists() and album_art_path.stat().st_mtime >= file_mtime:
+        data = album_art_path.read_bytes()
+    else:
+        # If album art does not exist or is outdated, extract from ID3 and save it
+        tag = get_album_art(song)
+        if not tag:
+            raise Http404('Album art not found in ID3 tags')
+        data = tag.data
+        album_art_path.write_bytes(data)
 
-    # If album art does not exist, extract from ID3 and save it
-    tag = get_album_art(song)
-    if not tag:
-        raise Http404('Album art not found in ID3 tags')
-
-    # Save the album art to the static directory
-    with Path.open(album_art_path, 'wb') as art_file:
-        art_file.write(tag.data)
-
-    # Serve the album art with cache headers
-    response = HttpResponse(tag.data, content_type='image/jpeg')
-    patch_cache_control(response, public=True, max_age=86400)
+    response = HttpResponse(data, content_type='image/jpeg')
+    if file_mtime:
+        response['Last-Modified'] = http_date(file_mtime)
+    patch_cache_control(response, public=True, no_cache=True)
     return response
 
 
