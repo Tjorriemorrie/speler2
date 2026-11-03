@@ -1,6 +1,9 @@
 import logging
+import time
 from typing import Any, Optional, Type
 
+from django.db import OperationalError
+from django.db.backends.signals import connection_created
 from django.db.models import Model, Q
 from django.db.models.signals import post_delete
 from django.dispatch import receiver
@@ -8,6 +11,32 @@ from django.dispatch import receiver
 from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
+
+LOCKED_RETRY_DELAY = 1
+
+
+def retry_locked(execute, sql, params, many, context):
+    """Retry a statement for as long as the database is locked by another writer.
+
+    Only outside a transaction: inside one this connection may hold the lock the other writer
+    waits on, and the statement alone can't be rerun.
+    """
+    attempt = 0
+    while True:
+        try:
+            return execute(sql, params, many, context)
+        except OperationalError as exc:
+            if 'database is locked' not in str(exc) or context['connection'].in_atomic_block:
+                raise
+            attempt += 1
+            logger.warning(f'🔒 Database locked, retrying: attempt={attempt}, sql={sql[:60]}')
+            time.sleep(LOCKED_RETRY_DELAY)
+
+
+@receiver(connection_created)
+def install_retry_locked(sender: Any, connection: Any, **kwargs: Any) -> None:
+    """Every connection retries "database is locked" instead of crashing."""
+    connection.execute_wrappers.append(retry_locked)
 
 
 @receiver(post_delete, sender=Song)

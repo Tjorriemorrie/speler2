@@ -171,6 +171,14 @@ without requiring the user to repeat the information later.
 - Log pylast errors with `{exc}`, never `{exc!r}`: `NetworkError`'s repr carries the
   `LastFMNetwork`, i.e. the api key, secret and session key.
 
+## Database
+
+- SQLite with `OPTIONS: {'timeout': 60}`: the player and long management commands write at the
+  same time, and the default 5 s busy wait crashed commands with "database is locked".
+- The timeout alone still let "database is locked" through on a long recheck, so
+  `signals.retry_locked` is installed on every connection and reruns a locked statement
+  forever, outside transactions only: inside one the statement can't be rerun on its own.
+
 ## Caching
 
 - `default` is LocMem and is wiped on every restart - fine for querysets, graphs and filters.

@@ -101,6 +101,8 @@ DATABASES = {
     'default': {
         'ENGINE': 'django.db.backends.sqlite3',
         'NAME': env.path('DB_PATH', default=BASE_DIR / 'db.sqlite3'),
+        # wait for a concurrent writer (the player vs a long command) instead of "database is locked"
+        'OPTIONS': {'timeout': 60},
     }
 }
 

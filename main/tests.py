@@ -7,6 +7,7 @@ import pytest
 from bs4 import BeautifulSoup
 from django.core.cache import cache, caches
 from django.core.management import call_command
+from django.db import OperationalError
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
@@ -36,6 +37,7 @@ from main.selectors import (
     upkeep_album,
     upkeep_artist,
 )
+from main.signals import retry_locked
 from main.templatetags.fmt import days_ago
 from main.views import (
     similars_bad_albums,
@@ -345,6 +347,45 @@ def test_deleting_an_album_marks_its_artist_dirty(db):
     album.delete()
 
     assert Artist.objects.get(id=album.artist_id).is_dirty
+
+
+def _locked_once():
+    calls = []
+
+    def execute(*args):
+        calls.append(args)
+        if len(calls) == 1:
+            raise OperationalError('database is locked')
+        return 'done'
+
+    return execute
+
+
+@patch('main.signals.time.sleep')
+def test_retry_locked_reruns_the_statement_until_unlocked(mock_sleep):
+    execute = _locked_once()
+    context = {'connection': SimpleNamespace(in_atomic_block=False)}
+
+    assert retry_locked(execute, 'UPDATE', (), False, context) == 'done'
+
+
+@patch('main.signals.time.sleep')
+def test_retry_locked_raises_inside_a_transaction(mock_sleep):
+    execute = _locked_once()
+    context = {'connection': SimpleNamespace(in_atomic_block=True)}
+
+    with pytest.raises(OperationalError):
+        retry_locked(execute, 'UPDATE', (), False, context)
+
+
+def test_retry_locked_raises_other_errors():
+    def execute(*args):
+        raise OperationalError('no such table: x')
+
+    context = {'connection': SimpleNamespace(in_atomic_block=False)}
+
+    with pytest.raises(OperationalError):
+        retry_locked(execute, 'SELECT', (), False, context)
 
 
 @pytest.fixture()
