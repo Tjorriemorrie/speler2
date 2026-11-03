@@ -315,8 +315,9 @@ def recheck_metadata(*args, check_all: bool = False, **kwargs):  # noqa: PLR0912
     changes = []
     missing = []
     skipped = 0
-    songs = Song.objects.select_related('album', 'artist')
-    for song in tqdm(songs, total=songs.count(), unit='song'):
+    # stat first so the bar only counts the files that are actually read
+    to_check = []
+    for song in Song.objects.select_related('album', 'artist'):
         file_path = song.file_path()
         try:
             mtime = file_path.stat().st_mtime
@@ -326,7 +327,9 @@ def recheck_metadata(*args, check_all: bool = False, **kwargs):  # noqa: PLR0912
         if not check_all and song.checked_at and mtime <= song.checked_at.timestamp():
             skipped += 1
             continue
+        to_check.append((song, file_path))
 
+    for song, file_path in tqdm(to_check, unit='song', mininterval=1, smoothing=0.05):
         metadata = parse_id3_tag(file_path.resolve())
         song_dirty = False
         album_dirty = False
