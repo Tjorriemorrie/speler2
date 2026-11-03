@@ -43,6 +43,12 @@ class Command(BaseCommand):
             'recheckmetadata',
             help='Recheck metadata of songs and albums.',
         )
+        recheck_parser.add_argument(
+            '--all',
+            action='store_true',
+            dest='check_all',
+            help='Recheck every file, not only those modified since their last check',
+        )
         recheck_parser.set_defaults(method=recheck_metadata)
 
         # Scrape Billboards parser

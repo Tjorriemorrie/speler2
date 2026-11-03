@@ -1075,6 +1075,7 @@ dependencies = [
     { name = "requests" },
     { name = "retry" },
     { name = "simpleaudio" },
+    { name = "tqdm" },
     { name = "unidecode" },
 ]
 
@@ -1110,6 +1111,7 @@ requires-dist = [
     { name = "requests" },
     { name = "retry" },
     { name = "simpleaudio" },
+    { name = "tqdm" },
     { name = "unidecode" },
 ]
 provides-extras = ["dev"]

@@ -347,15 +347,41 @@ def test_deleting_an_album_marks_its_artist_dirty(db):
     assert Artist.objects.get(id=album.artist_id).is_dirty
 
 
+@pytest.fixture()
+def song_file(editable_song, settings, tmp_path):
+    """The editable song with its audio file on disk."""
+    settings.MUSIC_DIR = tmp_path
+    file_path = editable_song.file_path()
+    file_path.parent.mkdir(parents=True)
+    file_path.touch()
+    return editable_song
+
+
+def _tags(song, **overrides):
+    """Parsed metadata matching the song as stored."""
+    return {
+        'artist_name': song.artist.name,
+        'album_name': song.album.name,
+        'year': song.album.year,
+        'total_tracks': song.album.total_tracks,
+        'total_discs': song.album.total_discs,
+        'song_title': song.name,
+        'disc_number': song.disc_number,
+        'track_number': song.track_number,
+        'track_length': song.track_length,
+        **overrides,
+    }
+
+
 @patch('main.musicfiles.validate_songs', autospec=True)
 @patch('main.musicfiles.parse_id3_tag', autospec=True)
 def test_recheck_metadata_marks_the_album_a_song_moved_from_dirty(
-    mock_parse, mock_validate, editable_song
+    mock_parse, mock_validate, song_file
 ):
     """A song retagged onto another album leaves its old album to be recounted."""
-    old_album_id = editable_song.album_id
+    old_album_id = song_file.album_id
     Album.objects.create(
-        artist=editable_song.artist,
+        artist=song_file.artist,
         name='Other Album',
         slug='edit-artist-other-album',
         year=2000,
@@ -363,21 +389,51 @@ def test_recheck_metadata_marks_the_album_a_song_moved_from_dirty(
         total_tracks=1,
         total_length=100.0,
     )
-    mock_parse.return_value = {
-        'artist_name': 'Edit Artist',
-        'album_name': 'Other Album',
-        'year': 2000,
-        'total_tracks': 1,
-        'total_discs': 1,
-        'song_title': editable_song.name,
-        'disc_number': 1,
-        'track_number': 1,
-        'track_length': 100.0,
-    }
+    mock_parse.return_value = _tags(song_file, album_name='Other Album')
 
     recheck_metadata()
 
     assert Album.objects.get(id=old_album_id).is_dirty
+
+
+@patch('main.musicfiles.parse_id3_tag', autospec=True)
+def test_recheck_metadata_records_when_the_file_was_checked(mock_parse, song_file):
+    """The next run can tell the file has not changed since."""
+    mock_parse.return_value = _tags(song_file)
+
+    recheck_metadata()
+
+    assert Song.objects.get(id=song_file.id).checked_at
+
+
+@patch('main.musicfiles.parse_id3_tag', autospec=True)
+def test_recheck_metadata_skips_files_unmodified_since_checked(mock_parse, song_file):
+    """Only files edited after their last check are parsed."""
+    Song.objects.filter(id=song_file.id).update(checked_at=timezone.now() + timedelta(days=1))
+
+    recheck_metadata()
+
+    mock_parse.assert_not_called()
+
+
+@patch('main.musicfiles.parse_id3_tag', autospec=True)
+def test_recheck_metadata_all_parses_unmodified_files(mock_parse, song_file):
+    """--all rechecks every file regardless of when it was checked."""
+    Song.objects.filter(id=song_file.id).update(checked_at=timezone.now() + timedelta(days=1))
+    mock_parse.return_value = _tags(song_file, song_title='Retagged')
+
+    recheck_metadata(check_all=True)
+
+    assert Song.objects.get(id=song_file.id).name == 'Retagged'
+
+
+def test_recheck_metadata_keeps_songs_whose_file_moved(editable_song, settings, tmp_path):
+    """A missing file is skipped, not a crash, and the song keeps its stats for scan."""
+    settings.MUSIC_DIR = tmp_path
+
+    recheck_metadata()
+
+    assert Song.objects.filter(id=editable_song.id).exists()
 
 
 # similar songs: fetching from last.fm and recommending

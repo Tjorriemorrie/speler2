@@ -11,6 +11,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from django.utils.timezone import make_aware
 from mutagen import flac, id3, mp3, mp4
+from tqdm import tqdm
 from unidecode import unidecode
 
 from main.models import Album, Artist, Song
@@ -150,7 +151,7 @@ def add_new_audio_file(
 
 def parse_id3_tag(file_path: str) -> dict:
     """Get metadata based on file type."""
-    logger.info(unidecode(f'Parsing ID3 tag for {file_path}'))
+    logger.debug(unidecode(f'Parsing ID3 tag for {file_path}'))
     suffix = file_path.suffix.lower()
     if suffix == '.mp3':
         metadata = get_mp3_metadata(file_path)
@@ -160,7 +161,7 @@ def parse_id3_tag(file_path: str) -> dict:
         metadata = get_flac_metadata(file_path)
     else:
         raise NotImplementedError(f'Unsupported file extension for {file_path}')
-    logger.info(f'Parsed metadata: {unidecode(str(metadata))}')
+    logger.debug(f'Parsed metadata: {unidecode(str(metadata))}')
     return metadata
 
 
@@ -297,11 +298,36 @@ def get_album_art(song: Song):
     return None
 
 
-def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
-    """Checks metadata of songs."""
+def _set_changed(obj, field: str, value, changes: List[str]) -> bool:
+    """Set the field when the value differs, recording the change."""
+    old = getattr(obj, field)
+    if old == value:
+        return False
+    setattr(obj, field, value)
+    changes.append(unidecode(f'{obj}: {field} {old!r} -> {value!r}'))
+    return True
+
+
+def recheck_metadata(*args, check_all: bool = False, **kwargs):  # noqa: PLR0912 PLR0915
+    """Checks metadata of songs whose file changed since they were last checked."""
+    started = timezone.now()
     outdated_albums = set()
-    for song in Song.objects.all():
-        metadata = parse_id3_tag(song.file_path().resolve())
+    changes = []
+    missing = []
+    skipped = 0
+    songs = Song.objects.select_related('album', 'artist')
+    for song in tqdm(songs, total=songs.count(), unit='song'):
+        file_path = song.file_path()
+        try:
+            mtime = file_path.stat().st_mtime
+        except FileNotFoundError:
+            missing.append(song)
+            continue
+        if not check_all and song.checked_at and mtime <= song.checked_at.timestamp():
+            skipped += 1
+            continue
+
+        metadata = parse_id3_tag(file_path.resolve())
         song_dirty = False
         album_dirty = False
         old_album_id, old_artist_id = song.album_id, song.artist_id
@@ -313,11 +339,11 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
             # otherwise it can just be changed
             try:
                 existing_artist = Artist.objects.get(slug=artist_slug)
-                logger.info(f'Switching artist to {existing_artist} from {song.artist}')
+                changes.append(f'{song}: artist switched to {existing_artist} from {song.artist}')
                 song.artist = existing_artist
                 song_dirty = True
             except Artist.DoesNotExist:
-                logger.info(f'Renaming artist to {metadata["artist_name"]} from {song.artist}')
+                changes.append(unidecode(f'{song.artist}: renamed to {metadata["artist_name"]}'))
                 song.artist.slug = artist_slug
                 song.artist.name = metadata['artist_name']
                 song.artist.save()
@@ -328,66 +354,54 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
             # otherwise the album was changed and not the artist
             try:
                 existing_album = Album.objects.get(slug=album_slug)
-                logger.info(f'Switching album to {existing_album} from {song.album}')
+                changes.append(f'{song}: album switched to {existing_album} from {song.album}')
                 song.album = existing_album
                 song_dirty = True
             except Album.DoesNotExist:
-                logger.info(f'Renaming album to {metadata["album_name"]} from {song.album}')
+                changes.append(unidecode(f'{song.album}: renamed to {metadata["album_name"]}'))
                 song.album.artist = song.artist
                 song.album.slug = album_slug
                 song.album.name = metadata['album_name']
                 album_dirty = True
 
         # check album metadata
-        if song.album.year != metadata['year']:
-            song.album.year = metadata['year']
-            album_dirty = True
-
         total_tracks = metadata['total_tracks'] or song.album.songs.count()
-        if song.album.total_tracks != total_tracks:
-            song.album.total_tracks = total_tracks
-            album_dirty = True
-
-        if song.album.total_discs != metadata['total_discs']:
-            song.album.total_discs = metadata['total_discs']
-            album_dirty = True
-
+        album_dirty |= _set_changed(song.album, 'year', metadata['year'], changes)
+        album_dirty |= _set_changed(song.album, 'total_tracks', total_tracks, changes)
+        album_dirty |= _set_changed(song.album, 'total_discs', metadata['total_discs'], changes)
         if album_dirty:
-            logger.info(f'Dirty album: {song.album}')
             song.album.save()
 
         # check song metadata
-        if song.name != metadata['song_title']:
-            song.name = metadata['song_title']
-            song_dirty = True
-
-        if song.disc_number != metadata['disc_number']:
-            song.disc_number = metadata['disc_number']
-            song_dirty = True
-
-        if song.track_number != metadata['track_number']:
-            song.track_number = metadata['track_number']
-            song_dirty = True
-
-        if song.track_length != metadata['track_length']:
-            song.track_length = metadata['track_length']
-            song_dirty = True
-
+        song_dirty |= _set_changed(song, 'name', metadata['song_title'], changes)
+        for field in ('disc_number', 'track_number', 'track_length'):
+            song_dirty |= _set_changed(song, field, metadata[field], changes)
         if song_dirty:
-            logger.info(f'Dirty song: {song}')
             song.save()
+        Song.objects.filter(id=song.id).update(checked_at=started)
 
         if album_dirty or song_dirty:
             outdated_albums.add(song.album)
 
-        # the album and artist moved away from (by the song, or by its album) are miscounted now
+        # the album and artist moved away from (by the song, or by its album) are miscounted
         if song.album_id != old_album_id or song.album.artist_id != old_artist_id:
             Album.objects.filter(id=old_album_id).update(is_dirty=True)
             Artist.objects.filter(id=old_artist_id).update(is_dirty=True)
-            logger.info(
-                f'📊 Moved {song}, marked dirty: old_album_id={old_album_id}, '
+            changes.append(
+                f'{song}: moved, marked dirty old_album_id={old_album_id} '
                 f'old_artist_id={old_artist_id}'
             )
+
+    for change in changes:
+        logger.info(f'✏️ {change}')
+    for song in missing:
+        logger.warning(f'Missing file for {song}: {unidecode(song.rel_path)}')
+    if missing:
+        logger.warning('Moved files? Run `parsemusic scan` first, it picks up renamed paths.')
+    logger.info(
+        f'Rechecked metadata: changes={len(changes)} unchanged_files={skipped} '
+        f'missing={len(missing)} all={check_all}'
+    )
 
     # update stats on albums
     outdated_artists = set()
@@ -434,8 +448,9 @@ def recheck_metadata(*args, **kwargs):  # noqa: PLR0912 PLR0915
         logger.info(f'📊 Updated stats for {artist}: rating={artist.rating:.3f}')
         artist.save()
 
-    # ensure to remove dud artists or albums that could be orphans
-    validate_songs()
+    # ensure to remove dud artists or albums that could be orphans, but keep the songs whose
+    # file is missing: they were most likely moved and still carry their stats
+    validate_songs(delete=False)
 
 
 def write_song_title(song: Song, title: str) -> None:

@@ -24,6 +24,7 @@ dependencies = [
     "pylast",
     "retry",
     "simpleaudio",
+    "tqdm",
     "unidecode",
     "numpy>=2.4.6",
 ]

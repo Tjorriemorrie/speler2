@@ -133,6 +133,9 @@ class Song(Timestamp, Rank):
     # last.fm similar tracks fetched (set even when there were none)
     similars_at = models.DateTimeField(null=True, blank=True)
 
+    # metadata last read from the file; recheckmetadata skips files not modified since
+    checked_at = models.DateTimeField(null=True, blank=True)
+
     # managers
     objects = managers.SongManager()
 
