@@ -144,27 +144,37 @@ without requiring the user to repeat the information later.
   song delete, the artist on an album delete; `recheck_metadata` marks the album and artist a
   song moved away from. `cleanstats` cascades songs → albums → artists; `--all` redoes every row.
 
-## Similar songs (last.fm)
+## Similars (last.fm)
 
 - `main/lastfm_service.py` only calls last.fm endpoints and returns plain data (titles,
-  playcounts, urls); business logic built on them lives in other modules (e.g.
-  `main/discography.py`). The older similars code there predates this rule.
+  playcounts, urls); business logic built on them lives in other modules (`main/discography.py`,
+  `main/similars.py`).
 - "More from artist" (`discography.py`) reuses `Artist.disco_at` as the reviewed marker. It
   skips top albums whose name matches an owned one by `track_slug` (so "(Deluxe Edition)" still
-  counts as owned) and keeps the unowned tracks above the album's mean last.fm playcount. Use
-  the mean, not mean + stdev: playcounts are skewed so hard that the stdev leaves only the hit.
-  The Wikipedia scraper (`scrape_studio_albums`) is kept but no longer wired to a view.
+  counts as owned) and keeps the unowned tracks above the album's mean last.fm playcount
+  (`get_stand_out_tracks`). Use the mean, not mean + stdev: playcounts are skewed so hard that
+  the stdev leaves only the hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no
+  longer wired to a view.
+- "Recommended album" (`similars.py`): last.fm has no similar-albums endpoint, so each seed
+  artist stores its similar artists (one `artist.getSimilar` call, up to 50, one page) as
+  `Similar` rows scored artist rating × match. Seeds are artists, not albums: albums by one
+  artist would repeat the same call. The artist with the highest summed score gives the
+  recommended album (its last.fm top album, with stand-out tracks as in "more from artist").
+  The summed score is only for ranking; it is not a percentage, so it is not shown. Listed
+  under it are the user's library artists that recommended it, with their match, best first, up
+  to `SIMILARS_ARTISTS_SHOWN` (5). Only the recommended artist's top album and tracks are looked
+  up, cached in `default` for 16 h.
 - Render first, fetch after: `snippet_similars_recommended.html` renders from the stored `Similar`
   rows, and only when `refreshed` is false carries an `hx-trigger="load"` element that re-requests
-  the view with `?refresh=1`, which fetches one seed song. The refresh render must not carry the
+  the view with `?refresh=1`, which fetches one seed artist. The refresh render must not carry the
   trigger again, or it loops. Reuse this for any other slow external call on page load.
-- Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of songs by `SIMILARS_SEED_ORDERING`
+- Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of artists by `SIMILARS_SEED_ORDERING`
   (ends in `id` so places are stable for the `n/total` progress). Never fetched goes first, then
   the oldest `similars_at` is redone; a refetch deletes that seed's `Similar` rows first.
-- `Song.similars_at` marks a seed done even with zero results; the rows can't be the marker because
-  removing a recommendation deletes them. Last.fm "Track not found" (`WSError` status `'6'`, a
-  string) is final; any other `PyLastError` (5xx carry an int status) leaves the song for retry.
-- Recommended songs are only by artists not in the library: owned artists are skipped on save and
+- `Artist.similars_at` marks a seed done even with zero results; the rows can't be the marker
+  because removing a recommendation deletes them. Last.fm "not found" (`WSError` status `'6'`, a
+  string) is final; any other `PyLastError` (5xx carry an int status) leaves the artist for retry.
+- Recommendations are only of artists not in the library: owned artists are skipped on save and
   their rows deleted on render if the artist was added since. Owned artists are covered by "more
   from artist" instead.
 - Matching to the library is by `artist_slug` (= `Artist.slug`, `slugify(unidecode())`) plus

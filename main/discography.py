@@ -40,39 +40,52 @@ def get_review_artist(refresh: bool) -> Artist:
     return artist
 
 
+def get_track_playcounts(artist_name: str) -> dict[str, int]:
+    """Get the play counts of the artist's top tracks by track slug."""
+    return {
+        track_slug(title): playcount
+        for title, playcount in get_artist_top_tracks(artist_name, ARTIST_TOP_TRACKS_LIMIT)
+    }
+
+
+def get_stand_out_tracks(
+    artist_name: str, album_title: str, playcounts: dict[str, int], owned: set[str]
+) -> list[dict]:
+    """Get the album's tracks played more than its mean, best first, without the owned slugs."""
+    tracks = {}
+    for track_name in get_album_tracks(artist_name, album_title):
+        tracks.setdefault(track_slug(track_name), track_name)
+    # last.fm counts are skewed to the hits, so the mean leaves the few stand-out tracks
+    cutoff = mean(playcounts.get(slug, 0) for slug in tracks) if tracks else 0
+    kept = sorted(
+        (
+            {'name': track_name, 'playcount': playcounts.get(slug, 0)}
+            for slug, track_name in tracks.items()
+            if playcounts.get(slug, 0) > cutoff and slug not in owned
+        ),
+        key=lambda track: track['playcount'],
+        reverse=True,
+    )[:ARTIST_ALBUM_TRACKS_SHOWN]
+    logger.info(
+        f'🎵 Picked album tracks: artist={artist_name}, album={album_title}, '
+        f'tracks={len(tracks)}, kept={len(kept)}'
+    )
+    return kept
+
+
 def get_unowned_top_albums(artist: Artist) -> list[dict]:
     """Get the artist's top albums not owned, each with its stand-out tracks not owned."""
     name = straighten_quotes(artist.name)
-    playcounts = {
-        track_slug(title): playcount
-        for title, playcount in get_artist_top_tracks(name, ARTIST_TOP_TRACKS_LIMIT)
-    }
+    playcounts = get_track_playcounts(name)
     owned_albums = {track_slug(album) for album in artist.albums.values_list('name', flat=True)}
-    owned_tracks = _owned_tracks({artist.slug})
+    owned_tracks = {slug for _, slug in _owned_tracks({artist.slug})}
 
     albums = []
     for title, album_playcount, url in get_artist_top_albums(name, ARTIST_TOP_ALBUMS_LIMIT):
         if track_slug(title) in owned_albums:
             logger.info(f'🎵 Skipped owned album: artist={artist.name}, album={title}')
             continue
-        tracks = {}
-        for track_name in get_album_tracks(name, title):
-            tracks.setdefault(track_slug(track_name), track_name)
-        # last.fm counts are skewed to the hits, so the mean leaves the few stand-out tracks
-        cutoff = mean(playcounts.get(slug, 0) for slug in tracks) if tracks else 0
-        kept = sorted(
-            (
-                {'name': track_name, 'playcount': playcounts.get(slug, 0)}
-                for slug, track_name in tracks.items()
-                if playcounts.get(slug, 0) > cutoff and (artist.slug, slug) not in owned_tracks
-            ),
-            key=lambda track: track['playcount'],
-            reverse=True,
-        )[:ARTIST_ALBUM_TRACKS_SHOWN]
-        logger.info(
-            f'🎵 Picked album tracks: artist={artist.name}, album={title}, '
-            f'tracks={len(tracks)}, kept={len(kept)}'
-        )
+        kept = get_stand_out_tracks(name, title, playcounts, owned_tracks)
         if not kept:
             continue
         albums.append({'name': title, 'playcount': album_playcount, 'url': url, 'tracks': kept})

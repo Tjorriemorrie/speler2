@@ -44,9 +44,9 @@ urlpatterns = [
     ),
     path('similars/recommended/', views.similars_recommended_view, name='similars_recommended'),
     path(
-        'similars/recommended/remove/<slug:artist_slug>/<slug:track_slug>/',
-        views.similars_remove_song,
-        name='similars_remove_song',
+        'similars/recommended/remove/<slug:artist_slug>/',
+        views.similars_remove_artist,
+        name='similars_remove_artist',
     ),
     path('similars/bad-albums/', views.similars_bad_albums, name='similars_bad_albums'),
     path('similars/bad-artists/', views.similars_bad_artists, name='similars_bad_artists'),

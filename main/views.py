@@ -20,11 +20,6 @@ from main.constants import GENRE_CHOICES
 from main.discography import get_review_artist, get_unowned_top_albums
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
-from main.lastfm_service import (
-    get_recommended_song,
-    get_similars_progress,
-    update_next_similar_song,
-)
 from main.lyrics import BrowserCheckError, search_azlyrics
 from main.models import Album, Artist, Similar, Song
 from main.musicfiles import get_album_art, write_song_title
@@ -40,6 +35,11 @@ from main.selectors import (
     get_top_percentile_songs,
     list_lowest_rated_albums,
     list_lowest_rated_artists,
+)
+from main.similars import (
+    get_recommended_album,
+    get_similars_progress,
+    update_next_similar_artist,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -490,35 +490,37 @@ def similars_missing_albums_view(request):
 
 
 def similars_recommended_view(request):
-    """Show the recommended song as stored, then (on refresh) after fetching the next song's."""
+    """Show the recommended album as stored, then (on refresh) after fetching the next artist's."""
     # the stored result renders straight away; its snippet then requests the refresh, so the
     # slow last.fm call never holds up the page
     refresh = bool(request.GET.get('refresh'))
     if refresh:
-        update_next_similar_song()
-    # every fetch marks its seed song, even with zero results, so this moves on each update
-    updated_at = Song.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
+        update_next_similar_artist()
+    # every fetch marks its seed artist, even with zero results, so this moves on each update
+    updated_at = Artist.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
     ctx = {
-        'recommended': get_recommended_song(),
         'refreshed': refresh,
         'updated_at': updated_at,
         'progress': get_similars_progress(),
     }
+    try:
+        ctx['recommended'] = get_recommended_album()
+    except PyLastError as exc:
+        logger.warning(f'⚠️ Fetching recommended album from LastFM failed: error={exc}')
+        ctx['error'] = str(exc)
+        ctx['recommended'] = None
 
     logger.info(
-        f'🎵 Rendered recommended song: refreshed={refresh}, found={bool(ctx["recommended"])}, '
+        f'🎵 Rendered recommended album: refreshed={refresh}, found={bool(ctx["recommended"])}, '
         f'updated_at={updated_at}, progress={ctx["progress"]}'
     )
     return render(request, 'main/snippet_similars_recommended.html', ctx)
 
 
-def similars_remove_song(request, artist_slug, track_slug):
-    """Remove a recommended song by deleting all its Similar records."""
-    deleted, _ = Similar.objects.filter(artist_slug=artist_slug, track_slug=track_slug).delete()
-    logger.info(
-        f'🗑️ Removed recommended song: artist_slug={artist_slug}, track_slug={track_slug}, '
-        f'deleted={deleted}'
-    )
+def similars_remove_artist(request, artist_slug):
+    """Remove a recommended album by deleting all its artist's Similar records."""
+    deleted, _ = Similar.objects.filter(artist_slug=artist_slug).delete()
+    logger.info(f'🗑️ Removed recommended artist: artist_slug={artist_slug}, deleted={deleted}')
     return similars_recommended_view(request)
 
 

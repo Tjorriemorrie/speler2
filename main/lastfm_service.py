@@ -1,6 +1,5 @@
 import datetime
 import logging
-import math
 import re
 import string
 import unicodedata
@@ -11,29 +10,19 @@ import pylast
 import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
-from django.db import transaction
-from django.db.models import Count, F, Max, Sum
+from django.db.models import F
 from django.utils import timezone
 from django.utils.text import slugify
 from pylast import LastFMNetwork
 from unidecode import unidecode
 
-from main.models import Artist, History, Similar, Song
+from main.models import Artist, History, Song
 
 logger = logging.getLogger(__name__)
 
-# fetch enough similar tracks that the best 10 by new artists are left after filtering
-SIMILARS_FETCH_LIMIT = 50
-SIMILARS_KEEP_LIMIT = 10
 # pylast fixes its timeout (5s connect, 10s read) for every call, so the fetch gets more time by
 # retrying; a scrobble keeps its single attempt, since playback waits on it
 SIMILARS_FETCH_ATTEMPTS = 3
-# order in which songs are fetched as seeds and listed as recommenders
-# id breaks ties, so a song keeps its place in the progress count between renders
-SIMILARS_SEED_ORDERING = ('-count_played', '-rating', '-artist__rating', 'id')
-# only the top decile of songs are seeds; once all are fetched they are refetched oldest first
-SIMILARS_SEED_SHARE = 0.1
-SIMILARS_SONGS_SHOWN = 10
 
 
 def get_network() -> LastFMNetwork:
@@ -102,177 +91,29 @@ def _owned_tracks(artist_slugs: set[str]) -> set[tuple[str, str]]:
     return owned
 
 
-def _get_similar_tracks(track: pylast.Track) -> list[pylast.SimilarItem]:
-    """Get the track's similar tracks, retrying network errors such as a timed out handshake."""
+def get_similar_artists(artist_name: str, limit: int) -> list[tuple[str, float]]:
+    """Get the artist's similar artists as (name, match), retrying network errors."""
+    lastfm_artist = get_network().get_artist(artist_name)
     for attempt in range(1, SIMILARS_FETCH_ATTEMPTS + 1):
         try:
-            similar_tracks = track.get_similar(limit=SIMILARS_FETCH_LIMIT)
+            similar_artists = lastfm_artist.get_similar(limit=limit)
         except pylast.NetworkError as exc:
             if attempt == SIMILARS_FETCH_ATTEMPTS:
                 logger.warning(
-                    f'⚠️ LastFM network error on the last attempt, giving up: track={track}, '
-                    f'attempts={attempt}'
+                    f'⚠️ LastFM network error on the last attempt, giving up: '
+                    f'artist={artist_name}, attempts={attempt}'
                 )
                 raise
             logger.warning(
-                f'⚠️ LastFM network error, retrying: track={track}, attempt={attempt}, error={exc}'
+                f'⚠️ LastFM network error, retrying: artist={artist_name}, attempt={attempt}, '
+                f'error={exc}'
             )
             continue
         logger.info(
-            f'🎵 Fetched similar tracks: track={track}, attempt={attempt}, '
-            f'count={len(similar_tracks)}'
+            f'🎵 Fetched similar artists: artist={artist_name}, attempt={attempt}, '
+            f'count={len(similar_artists)}'
         )
-        return similar_tracks
-
-
-def _get_seed_ids() -> list[int]:
-    """Ids of the seed songs: the top decile of the library, best first."""
-    limit = math.ceil(Song.objects.count() * SIMILARS_SEED_SHARE)
-    return list(
-        Song.objects.order_by(*SIMILARS_SEED_ORDERING).values_list('id', flat=True)[:limit]
-    )
-
-
-def get_similars_progress() -> tuple[int, int] | None:
-    """Place of the latest fetched seed among the seeds, and how many seeds there are."""
-    seed_ids = _get_seed_ids()
-    latest_id = (
-        Song.objects.filter(id__in=seed_ids, similars_at__isnull=False)
-        .order_by('-similars_at')
-        .values_list('id', flat=True)
-        .first()
-    )
-    if latest_id is None:
-        return None
-    return seed_ids.index(latest_id) + 1, len(seed_ids)
-
-
-def update_next_similar_song():
-    """Store the best similar tracks not owned yet for the seed song fetched longest ago."""
-    if not settings.LASTFM_ENABLE:
-        logger.info('🎵 LastFM disabled, not updating similar songs')
-        return
-
-    # never fetched comes first, best seed first; after that the oldest fetch is redone
-    seed = (
-        Song.objects.filter(id__in=_get_seed_ids())
-        .select_related('artist')
-        .order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
-        .first()
-    )
-    if not seed:
-        logger.info('🎵 No songs in the library, nothing to update')
-        return
-
-    seed_artist = straighten_quotes(seed.artist.name)
-    seed_title = straighten_quotes(seed.name)
-    logger.info(
-        f'🎵 Fetching similar songs: song_id={seed.id}, artist={seed_artist}, title={seed_title}'
-    )
-    try:
-        lastfm_track = get_network().get_track(seed_artist, seed_title)
-        similar_tracks = _get_similar_tracks(lastfm_track)
-    except pylast.PyLastError as exc:
-        # unknown track is final, so it must not block the songs after it; anything else is retried
-        if not (
-            isinstance(exc, pylast.WSError) and exc.status == str(pylast.STATUS_INVALID_PARAMS)
-        ):
-            logger.warning(
-                f'⚠️ Fetching similar songs from LastFM failed, retrying next update: '
-                f'song_id={seed.id}, artist={seed_artist}, title={seed_title}, error={exc}'
-            )
-            return
-        logger.warning(
-            f'⚠️ Song not found on LastFM, marking it done: song_id={seed.id}, '
-            f'artist={seed_artist}, title={seed_title}'
-        )
-        similar_tracks = []
-
-    tracks = [
-        (similar.item.artist.name, similar.item.title, similar.match) for similar in similar_tracks
-    ]
-    # only artists not in the library are recommended, owned ones get "more from artist"
-    owned_artists = _owned_artists({artist_slug(name) for name, _, _ in tracks})
-    # repeats that slug the same (e.g. a live version) are skipped
-    seen = set()
-    count_skipped = 0
-    now = timezone.now()
-    similars = []
-    for track_artist, track_name, match in tracks:
-        key = (artist_slug(track_artist), track_slug(track_name))
-        # an empty slug (e.g. a title only in brackets) cannot be put in the remove url
-        if not all(key) or key[0] in owned_artists or key in seen:
-            count_skipped += 1
-            continue
-        seen.add(key)
-        similars.append(
-            Similar(
-                song=seed,
-                artist_name=track_artist,
-                artist_slug=key[0],
-                track_name=track_name,
-                track_slug=key[1],
-                match=match,
-                rating=seed.rating,
-                score=seed.rating * match,
-                scraped_at=now,
-            )
-        )
-        if len(similars) == SIMILARS_KEEP_LIMIT:
-            break
-
-    # a refetch replaces the seed's previous tracks rather than adding to them
-    with transaction.atomic():
-        count_replaced, _ = Similar.objects.filter(song=seed).delete()
-        Similar.objects.bulk_create(similars)
-        seed.similars_at = now
-        seed.save(update_fields=['similars_at'])
-    logger.info(
-        f'🎵 Similar songs updated: song_id={seed.id}, artist={seed_artist}, title={seed_title}, '
-        f'fetched={len(tracks)}, skipped={count_skipped}, saved={len(similars)}, '
-        f'replaced={count_replaced}'
-    )
-
-
-def get_recommended_song() -> dict | None:
-    """Get the track most similar across the library, with the best songs that recommended it."""
-    ranked = (
-        Similar.objects.values('artist_slug', 'track_slug')
-        .annotate(
-            total_score=Sum('score'),
-            count_songs=Count('id'),
-            artist_name=Max('artist_name'),
-            track_name=Max('track_name'),
-        )
-        .order_by('-total_score')
-    )
-    for best in ranked:
-        # the artist may have been added to the library since it was fetched
-        if not _owned_artists({best['artist_slug']}):
-            break
-        deleted, _ = Similar.objects.filter(artist_slug=best['artist_slug']).delete()
-        logger.info(
-            f'🎵 Dropped recommendations of artist now in library: '
-            f'artist={best["artist_name"]}, deleted={deleted}'
-        )
-    else:
-        logger.info('🎵 No recommended song yet')
-        return None
-
-    best['songs'] = list(
-        Song.objects.filter(
-            similars__artist_slug=best['artist_slug'], similars__track_slug=best['track_slug']
-        )
-        .select_related('artist', 'album')
-        # reuses the filter's join, so each song gets the match of its own row
-        .annotate(match=F('similars__match'))
-        .order_by('-match')[:SIMILARS_SONGS_SHOWN]
-    )
-    logger.info(
-        f'🎵 Recommended song: artist={best["artist_name"]}, track={best["track_name"]}, '
-        f'total_score={best["total_score"]:.3f}, count_songs={best["count_songs"]}'
-    )
-    return best
+        return [(similar.item.name, similar.match) for similar in similar_artists]
 
 
 def get_artist_top_tracks(artist_name: str, limit: int) -> list[tuple[str, int]]:

@@ -16,17 +16,13 @@ from unidecode import unidecode
 
 from main.discography import get_unowned_top_albums
 from main.lastfm_service import (
-    SIMILARS_FETCH_ATTEMPTS,
-    SIMILARS_KEEP_LIMIT,
     artist_slug,
     extract_albums_from_table,
     get_album_tracks,
     get_artist_top_albums,
     get_artist_top_tracks,
-    get_recommended_song,
+    get_similar_artists,
     scrobble,
-    track_slug,
-    update_next_similar_song,
 )
 from main.models import Album, Artist, History, Rating, Similar, Song
 from main.musicfiles import recheck_metadata
@@ -39,13 +35,18 @@ from main.selectors import (
     upkeep_artist,
 )
 from main.signals import retry_locked
+from main.similars import (
+    SIMILARS_FETCH_LIMIT,
+    get_recommended_album,
+    update_next_similar_artist,
+)
 from main.templatetags.fmt import days_ago
 from main.views import (
     similars_bad_albums,
     similars_bad_artists,
     similars_missing_albums_view,
     similars_recommended_view,
-    similars_remove_song,
+    similars_remove_artist,
 )
 
 
@@ -520,7 +521,7 @@ def test_album_art_not_modified_since_the_file_changed(client, cached_art):
     assert response.status_code == 304
 
 
-# similar songs: fetching from last.fm and recommending
+# similar artists: fetched from last.fm per library artist, recommended by their top album
 
 
 def _make_album_song(album, name, **fields):
@@ -539,14 +540,12 @@ def _make_album_song(album, name, **fields):
     )
 
 
-def _make_similar(song, artist_name, track_name, score):
-    """Create a similar track recommended by the song."""
+def _make_similar(artist, artist_name, score):
+    """Create a similar artist recommended by the library artist."""
     return Similar.objects.create(
-        song=song,
+        artist=artist,
         artist_name=artist_name,
         artist_slug=artist_slug(artist_name),
-        track_name=track_name,
-        track_slug=track_slug(track_name),
         match=score,
         rating=1.0,
         score=score,
@@ -554,17 +553,11 @@ def _make_similar(song, artist_name, track_name, score):
     )
 
 
-def _similar_item(artist_name, title, match):
-    """A last.fm similar track as pylast returns it."""
-    network = SimpleNamespace(username=None)
-    return pylast.SimilarItem(pylast.Track(artist_name, title, network), match)
-
-
 @pytest.fixture()
 def seed_songs(db):
-    """Two songs still to fetch, the most played first, and Måneskin's Beggin' already owned."""
+    """Two songs by the best artist, and Måneskin's Beggin' by a worse artist already owned."""
     seed_artist = Artist.objects.create(
-        name='Seed Artist', slug='seed-artist', count_albums=1, total_length=100.0
+        name='Seed Artist', slug='seed-artist', count_albums=1, total_length=100.0, rating=0.8
     )
     seed_album = Album.objects.create(
         artist=seed_artist,
@@ -576,7 +569,7 @@ def seed_songs(db):
         total_length=100.0,
     )
     owned_artist = Artist.objects.create(
-        name='Måneskin', slug='maneskin', count_albums=1, total_length=100.0
+        name='Måneskin', slug='maneskin', count_albums=1, total_length=100.0, rating=0.5
     )
     owned_album = Album.objects.create(
         artist=owned_artist,
@@ -587,10 +580,16 @@ def seed_songs(db):
         total_tracks=1,
         total_length=100.0,
     )
-    _make_album_song(owned_album, 'Beggin’ (Live)', similars_at=timezone.now())
+    _make_album_song(owned_album, 'Beggin’ (Live)')
     top = _make_album_song(seed_album, 'Top Song’s', count_played=5, rating=0.8)
     low = _make_album_song(seed_album, 'Low Song', count_played=1, rating=0.9)
     return top, low
+
+
+@pytest.fixture()
+def seed_artists(seed_songs):
+    """The seed artist and Måneskin."""
+    return Artist.objects.get(name='Seed Artist'), Artist.objects.get(name='Måneskin')
 
 
 @pytest.fixture()
@@ -601,190 +600,213 @@ def lastfm(settings):
         yield mock_network.return_value
 
 
-def test_update_similars_queries_best_seed_with_straight_quotes(lastfm, seed_songs):
-    """The most played song is fetched first, with its curly apostrophe straightened."""
-    lastfm.get_track.return_value.get_similar.return_value = []
-
-    update_next_similar_song()
-
-    lastfm.get_track.assert_called_once_with('Seed Artist', "Top Song's")
-
-
-def test_update_similars_saves_only_new_tracks(lastfm, seed_songs):
-    """Owned artists (accents aside), repeated and unsluggable tracks are skipped."""
-    top, _ = seed_songs
-    lastfm.get_track.return_value.get_similar.return_value = [
-        _similar_item('Maneskin', 'Not Owned Song', 1.0),
-        _similar_item('New Band', 'Hit', 0.5),
-        _similar_item('New Band', 'Hit (Remastered)', 0.4),
-        _similar_item('Tool', '(-)', 0.3),
-    ]
-
-    update_next_similar_song()
-
-    saved = list(Similar.objects.values_list('song', 'track_slug', 'score'))
-    assert saved == [(top.id, 'hit', top.rating * 0.5)]
+@pytest.fixture()
+def similar_artists(settings):
+    """Last.fm enabled with the similar artists fetch mocked."""
+    settings.LASTFM_ENABLE = True
+    with patch('main.similars.get_similar_artists', autospec=True, return_value=[]) as mock:
+        yield mock
 
 
-def test_update_similars_keeps_the_best_ten(lastfm, seed_songs):
-    """Only the best 10 new tracks are saved."""
-    lastfm.get_track.return_value.get_similar.return_value = [
-        _similar_item('New Band', f'Hit {i}', 1 - i / 100) for i in range(12)
-    ]
-
-    update_next_similar_song()
-
-    assert Similar.objects.count() == SIMILARS_KEEP_LIMIT
-
-
-def test_update_similars_marks_seed_done(lastfm, seed_songs):
-    """The song is not fetched again."""
-    top, _ = seed_songs
-    lastfm.get_track.return_value.get_similar.return_value = []
-
-    update_next_similar_song()
-
-    top.refresh_from_db()
-    assert top.similars_at is not None
-
-
-def test_update_similars_marks_unknown_track_done(lastfm, seed_songs):
-    """A track last.fm does not know must not block the songs after it."""
-    top, _ = seed_songs
-    lastfm.get_track.return_value.get_similar.side_effect = pylast.WSError(
-        None, '6', 'Track not found'
-    )
-
-    update_next_similar_song()
-
-    top.refresh_from_db()
-    assert top.similars_at is not None
-
-
-def test_update_similars_retries_after_outage(lastfm, seed_songs):
-    """A last.fm outage leaves the song to be fetched on the next update."""
-    top, _ = seed_songs
-    lastfm.get_track.return_value.get_similar.side_effect = pylast.WSError(
-        None, 503, 'Connection to the API failed with HTTP code 503'
-    )
-
-    update_next_similar_song()
-
-    top.refresh_from_db()
-    assert top.similars_at is None
-
-
-def test_update_similars_retries_network_error(lastfm, seed_songs):
+def test_similar_artists_retries_network_error(lastfm):
     """A timed out handshake is retried, so one slow connection does not lose the update."""
-    top, _ = seed_songs
-    lastfm.get_track.return_value.get_similar.side_effect = [
+    lastfm.get_artist.return_value.get_similar.side_effect = [
         pylast.NetworkError(None, TimeoutError('handshake timed out')),
-        [],
+        [pylast.SimilarItem(SimpleNamespace(name='New Band'), 0.5)],
     ]
 
-    update_next_similar_song()
-
-    top.refresh_from_db()
-    assert top.similars_at is not None
+    assert get_similar_artists('Band', 50) == [('New Band', 0.5)]
 
 
-def test_update_similars_gives_up_after_network_errors(lastfm, seed_songs, caplog):
-    """Every attempt failing leaves the song for later, without logging the network's keys."""
+def test_similar_artists_gives_up_after_network_errors(lastfm, caplog):
+    """Every attempt failing raises, without logging the network's keys."""
     # the error holds the network, whose repr carries the api key, secret and session key
-    lastfm.get_track.return_value.get_similar.side_effect = pylast.NetworkError(
+    lastfm.get_artist.return_value.get_similar.side_effect = pylast.NetworkError(
         'api-secret', TimeoutError('handshake timed out')
     )
 
-    update_next_similar_song()
+    with pytest.raises(pylast.NetworkError):
+        get_similar_artists('Band', 50)
 
-    assert lastfm.get_track.return_value.get_similar.call_count == SIMILARS_FETCH_ATTEMPTS
     assert 'api-secret' not in caplog.text
 
 
-def test_update_similars_seeds_only_top_decile(lastfm, seed_songs):
-    """A song outside the top decile is never fetched, the fetched top song is redone instead."""
-    top, _ = seed_songs
-    top.similars_at = timezone.now()
-    top.save()
-    lastfm.get_track.return_value.get_similar.return_value = []
+def test_update_similars_queries_best_seed_artist(similar_artists, seed_songs):
+    """The best rated artist is fetched first."""
+    update_next_similar_artist()
 
-    update_next_similar_song()
-
-    lastfm.get_track.assert_called_once_with('Seed Artist', "Top Song's")
+    similar_artists.assert_called_once_with('Seed Artist', SIMILARS_FETCH_LIMIT)
 
 
-def test_update_similars_refetches_oldest_seed(lastfm, seed_songs, monkeypatch):
+def test_update_similars_saves_only_new_artists(similar_artists, seed_songs):
+    """Owned artists (accents aside), repeated and unsluggable artists are skipped."""
+    similar_artists.return_value = [
+        ('Maneskin', 1.0),
+        ('New Band', 0.5),
+        ('New Band', 0.4),
+        ('(-)', 0.3),
+    ]
+
+    update_next_similar_artist()
+
+    saved = list(Similar.objects.values_list('artist__name', 'artist_slug', 'score'))
+    assert saved == [('Seed Artist', 'new-band', 0.8 * 0.5)]
+
+
+def test_update_similars_marks_seed_done(similar_artists, seed_artists):
+    """The artist is not fetched again."""
+    seed, _ = seed_artists
+
+    update_next_similar_artist()
+
+    seed.refresh_from_db()
+    assert seed.similars_at is not None
+
+
+def test_update_similars_marks_unknown_artist_done(similar_artists, seed_artists):
+    """An artist last.fm does not know must not block the artists after it."""
+    seed, _ = seed_artists
+    similar_artists.side_effect = pylast.WSError(None, '6', 'Artist not found')
+
+    update_next_similar_artist()
+
+    seed.refresh_from_db()
+    assert seed.similars_at is not None
+
+
+def test_update_similars_retries_after_outage(similar_artists, seed_artists):
+    """A last.fm outage leaves the artist to be fetched on the next update."""
+    seed, _ = seed_artists
+    similar_artists.side_effect = pylast.WSError(
+        None, 503, 'Connection to the API failed with HTTP code 503'
+    )
+
+    update_next_similar_artist()
+
+    seed.refresh_from_db()
+    assert seed.similars_at is None
+
+
+def test_update_similars_seeds_only_top_decile(similar_artists, seed_artists):
+    """An artist outside the top decile is never fetched, the fetched top one is redone instead."""
+    seed, _ = seed_artists
+    seed.similars_at = timezone.now()
+    seed.save()
+
+    update_next_similar_artist()
+
+    similar_artists.assert_called_once_with('Seed Artist', SIMILARS_FETCH_LIMIT)
+
+
+def test_update_similars_refetches_oldest_seed(similar_artists, seed_artists, monkeypatch):
     """Once every seed is fetched, the one fetched longest ago is fetched again."""
-    monkeypatch.setattr('main.lastfm_service.SIMILARS_SEED_SHARE', 1)
-    _, low = seed_songs
-    Song.objects.update(similars_at=timezone.now())
-    Song.objects.filter(id=low.id).update(similars_at=timezone.now() - timedelta(days=1))
-    lastfm.get_track.return_value.get_similar.return_value = []
+    monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
+    _, owned = seed_artists
+    Artist.objects.update(similars_at=timezone.now())
+    Artist.objects.filter(id=owned.id).update(similars_at=timezone.now() - timedelta(days=1))
 
-    update_next_similar_song()
+    update_next_similar_artist()
 
-    lastfm.get_track.assert_called_once_with('Seed Artist', 'Low Song')
+    similar_artists.assert_called_once_with('Måneskin', SIMILARS_FETCH_LIMIT)
 
 
-def test_update_similars_refetch_replaces_old_tracks(lastfm, seed_songs):
-    """A refetch drops the seed's previous tracks instead of adding duplicates."""
-    top, _ = seed_songs
-    _make_similar(top, 'New Band', 'Hit', 0.3)
-    lastfm.get_track.return_value.get_similar.return_value = [_similar_item('New Band', 'Hit', 0.5)]
+def test_update_similars_refetch_replaces_old_artists(similar_artists, seed_artists):
+    """A refetch drops the seed's previous artists instead of adding duplicates."""
+    seed, _ = seed_artists
+    _make_similar(seed, 'New Band', 0.3)
+    similar_artists.return_value = [('New Band', 0.5)]
 
-    update_next_similar_song()
+    update_next_similar_artist()
 
     assert list(Similar.objects.values_list('match', flat=True)) == [0.5]
 
 
-def test_update_similars_empty_library_skips_lastfm(lastfm, db):
-    """Nothing is fetched without songs."""
-    update_next_similar_song()
+def test_update_similars_empty_library_skips_lastfm(similar_artists, db):
+    """Nothing is fetched without artists."""
+    update_next_similar_artist()
 
-    lastfm.get_track.assert_not_called()
+    similar_artists.assert_not_called()
 
 
-@patch('main.lastfm_service.get_network', autospec=True)
-def test_update_similars_disabled_skips_lastfm(mock_network, settings, seed_songs):
+def test_update_similars_disabled_skips_lastfm(similar_artists, settings, seed_songs):
     """Without last.fm credentials nothing is fetched."""
     settings.LASTFM_ENABLE = False
 
-    update_next_similar_song()
+    update_next_similar_artist()
 
-    mock_network.assert_not_called()
+    similar_artists.assert_not_called()
 
 
-def test_recommended_song_cold_start(db):
+@pytest.fixture()
+def lastfm_top_albums():
+    """Every artist's top album is '<artist> Album', except Empty Band, which has none."""
+    with (
+        patch('main.similars.get_artist_top_albums', autospec=True) as mock_albums,
+        patch('main.similars.get_track_playcounts', autospec=True, return_value={}),
+        patch('main.similars.get_stand_out_tracks', autospec=True) as mock_tracks,
+    ):
+        mock_albums.side_effect = lambda name, limit: (
+            [] if name == 'Empty Band' else [(f'{name} Album', 100, f'url-{name}')]
+        )
+        mock_tracks.return_value = [{'name': 'Hit', 'playcount': 500}]
+        yield mock_albums
+
+
+def test_recommended_album_cold_start(db):
     """Nothing is recommended before any similars are fetched."""
-    assert get_recommended_song() is None
+    assert get_recommended_album() is None
 
 
-def test_recommended_song_sums_scores_across_songs(seed_songs):
-    """Two weaker recommendations beat one strong one, listed by the best match first."""
-    top, low = seed_songs
-    _make_similar(top, 'New Band', 'Hit', 0.3)
-    _make_similar(low, 'New Band', 'Hit', 0.4)
-    _make_similar(top, 'Solo Band', 'Solo', 0.6)
+def test_recommended_album_sums_scores_across_albums(lastfm_top_albums, seed_artists):
+    """Two weaker recommendations beat one strong one."""
+    seed, owned = seed_artists
+    _make_similar(seed, 'New Band', 0.3)
+    _make_similar(owned, 'New Band', 0.4)
+    _make_similar(seed, 'Solo Band', 0.6)
 
-    recommended = get_recommended_song()
-
-    assert (recommended['track_slug'], recommended['songs']) == ('hit', [low, top])
-    assert [song.match for song in recommended['songs']] == [0.4, 0.3]
+    assert get_recommended_album()['name'] == 'New Band Album'
 
 
-def test_recommended_song_drops_artist_added_to_library(seed_songs):
+def test_recommended_album_carries_stand_out_tracks(lastfm_top_albums, seed_artists):
+    """The recommended album's stand-out tracks are shown with it."""
+    seed, _ = seed_artists
+    _make_similar(seed, 'New Band', 0.6)
+
+    assert get_recommended_album()['tracks'] == [{'name': 'Hit', 'playcount': 500}]
+
+
+def test_recommended_album_lists_library_artists_most_similar_first(
+    lastfm_top_albums, seed_artists
+):
+    """The library artists that recommended the artist are listed by their match."""
+    seed, owned = seed_artists
+    _make_similar(seed, 'New Band', 0.3)
+    _make_similar(owned, 'New Band', 0.4)
+
+    assert get_recommended_album()['artists'] == [owned, seed]
+
+
+def test_recommended_album_drops_artist_added_to_library(lastfm_top_albums, seed_artists):
     """An artist added since it was fetched is deleted, the next one is shown."""
-    top, _ = seed_songs
-    _make_similar(top, 'Maneskin', 'Not Owned Song', 0.9)
-    _make_similar(top, 'New Band', 'Hit', 0.3)
+    seed, _ = seed_artists
+    _make_similar(seed, 'Maneskin', 0.9)
+    _make_similar(seed, 'New Band', 0.3)
 
-    recommended = get_recommended_song()
+    get_recommended_album()
 
-    assert recommended['track_slug'] == 'hit'
-    assert not Similar.objects.filter(artist_slug='maneskin').exists()
+    assert list(Similar.objects.values_list('artist_slug', flat=True)) == ['new-band']
 
 
-@patch('main.views.update_next_similar_song', autospec=True)
+def test_recommended_album_skips_artist_without_albums(lastfm_top_albums, seed_artists):
+    """An artist last.fm has no albums for is passed over."""
+    seed, _ = seed_artists
+    _make_similar(seed, 'Empty Band', 0.9)
+    _make_similar(seed, 'New Band', 0.3)
+
+    assert get_recommended_album()['artist_name'] == 'New Band'
+
+
+@patch('main.views.update_next_similar_artist', autospec=True)
 def test_recommended_view_requests_refresh_after_render(mock_update, rf, db):
     """The stored result renders without waiting on last.fm, then asks for the refresh."""
     response = similars_recommended_view(rf.get('/similars/recommended/'))
@@ -793,9 +815,9 @@ def test_recommended_view_requests_refresh_after_render(mock_update, rf, db):
     assert 'hx-trigger="load"' in response.content.decode('utf-8')
 
 
-@patch('main.views.update_next_similar_song', autospec=True)
+@patch('main.views.update_next_similar_artist', autospec=True)
 def test_recommended_view_refresh_updates_once(mock_update, rf, db):
-    """The refresh fetches one song and does not ask for another."""
+    """The refresh fetches one artist and does not ask for another."""
     response = similars_recommended_view(rf.get('/similars/recommended/?refresh=1'))
 
     mock_update.assert_called_once()
@@ -805,43 +827,50 @@ def test_recommended_view_refresh_updates_once(mock_update, rf, db):
 @pytest.mark.parametrize(
     ('days_ago', 'shown'), [(0, '{:%H:%M:%S}'), (1, '{0.day} {0:%b %H:%M:%S}')]
 )
-@patch('main.views.update_next_similar_song', autospec=True)
+@patch('main.views.update_next_similar_artist', autospec=True)
 def test_recommended_view_shows_last_updated(mock_update, rf, seed_songs, days_ago, shown):
     """The time of the latest fetch is shown to the second, with the date only when not today."""
     similars_at = timezone.localtime() - timedelta(days=days_ago)
-    Song.objects.update(similars_at=similars_at)
+    Artist.objects.update(similars_at=similars_at)
 
     response = similars_recommended_view(rf.get('/similars/recommended/'))
 
     assert f'last updated: {shown.format(similars_at)}' in response.content.decode('utf-8')
 
 
-@patch('main.views.update_next_similar_song', autospec=True)
-def test_recommended_view_shows_progress(mock_update, rf, seed_songs, monkeypatch):
+@patch('main.views.update_next_similar_artist', autospec=True)
+def test_recommended_view_shows_progress(mock_update, rf, seed_artists, monkeypatch):
     """The latest fetched seed's place among the seeds is shown next to the time."""
-    monkeypatch.setattr('main.lastfm_service.SIMILARS_SEED_SHARE', 1)
-    _, low = seed_songs
-    Song.objects.filter(id=low.id).update(similars_at=timezone.now() + timedelta(seconds=1))
+    monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
+    _, owned = seed_artists
+    owned.similars_at = timezone.now()
+    owned.save()
 
     response = similars_recommended_view(rf.get('/similars/recommended/'))
 
-    assert '(2/3)' in response.content.decode('utf-8')
+    assert '(2/2)' in response.content.decode('utf-8')
 
 
-@patch('main.views.update_next_similar_song', autospec=True)
-def test_remove_song_deletes_only_that_track(mock_update, rf, seed_songs):
-    """Every row of the removed track goes, and the next one is shown."""
-    top, low = seed_songs
-    _make_similar(top, 'New Band', 'Hit', 0.4)
-    _make_similar(low, 'New Band', 'Hit', 0.3)
-    _make_similar(top, 'Solo Band', 'Solo', 0.6)
+@patch('main.views.get_recommended_album', autospec=True)
+def test_recommended_view_shows_lastfm_error(mock_album, rf, db):
+    """A last.fm failure is shown in the column."""
+    mock_album.side_effect = pylast.WSError(None, '8', 'Operation failed')
 
-    response = similars_remove_song(
-        rf.get('/similars/recommended/remove/new-band/hit/'), 'new-band', 'hit'
-    )
+    response = similars_recommended_view(rf.get('/similars/recommended/'))
 
-    assert list(Similar.objects.values_list('track_slug', flat=True)) == ['solo']
-    assert 'Solo Band' in response.content.decode('utf-8')
+    assert 'Operation failed' in response.content.decode('utf-8')
+
+
+def test_remove_artist_deletes_only_that_artist(rf, lastfm_top_albums, seed_artists):
+    """Every row of the removed artist goes, and the next one is shown."""
+    seed, owned = seed_artists
+    _make_similar(seed, 'New Band', 0.4)
+    _make_similar(owned, 'New Band', 0.3)
+    _make_similar(seed, 'Solo Band', 0.6)
+
+    response = similars_remove_artist(rf.get('/similars/recommended/remove/new-band/'), 'new-band')
+
+    assert 'Solo Band Album' in response.content.decode('utf-8')
 
 
 # more from artist: stand-out songs of the top albums not owned
