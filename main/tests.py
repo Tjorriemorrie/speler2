@@ -698,6 +698,18 @@ def test_update_similars_seeds_only_top_decile(similar_artists, seed_artists):
     similar_artists.assert_called_once_with('Seed Artist', SIMILARS_FETCH_LIMIT)
 
 
+def test_update_similars_drops_former_seed(similar_artists, seed_artists):
+    """An artist fallen out of the seeds loses its similars and is fetched anew if back."""
+    _, owned = seed_artists
+    _make_similar(owned, 'New Band', 0.3)
+    Artist.objects.filter(id=owned.id).update(similars_at=timezone.now())
+
+    update_next_similar_artist()
+
+    assert Artist.objects.filter(similars__isnull=False).count() == 0
+    assert Artist.objects.get(id=owned.id).similars_at is None
+
+
 def test_update_similars_refetches_oldest_seed(similar_artists, seed_artists, monkeypatch):
     """Once every seed is fetched, the one fetched longest ago is fetched again."""
     monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
@@ -840,7 +852,7 @@ def test_recommended_view_shows_last_updated(mock_update, rf, seed_songs, days_a
 
 @patch('main.views.update_next_similar_artist', autospec=True)
 def test_recommended_view_shows_progress(mock_update, rf, seed_artists, monkeypatch):
-    """The latest fetched seed's place among the seeds is shown next to the time."""
+    """During the first pass the number of fetched seeds is shown next to the time."""
     monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
     _, owned = seed_artists
     owned.similars_at = timezone.now()
@@ -848,7 +860,20 @@ def test_recommended_view_shows_progress(mock_update, rf, seed_artists, monkeypa
 
     response = similars_recommended_view(rf.get('/similars/recommended/'))
 
-    assert '(2/2)' in response.content.decode('utf-8')
+    assert '(1/2)' in response.content.decode('utf-8')
+
+
+@patch('main.views.update_next_similar_artist', autospec=True)
+def test_recommended_view_shows_redone_seed(mock_update, rf, seed_artists, monkeypatch):
+    """Once every seed is fetched, the place of the latest redone seed is shown."""
+    monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
+    _, owned = seed_artists
+    Artist.objects.update(similars_at=timezone.now() - timedelta(days=1))
+    Artist.objects.filter(id=owned.id).update(similars_at=timezone.now())
+
+    response = similars_recommended_view(rf.get('/similars/recommended/'))
+
+    assert '(2 done - redid #2)' in response.content.decode('utf-8')
 
 
 @patch('main.views.get_recommended_album', autospec=True)

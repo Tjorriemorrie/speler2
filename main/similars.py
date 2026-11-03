@@ -40,18 +40,21 @@ def _get_seed_ids() -> list[int]:
     )
 
 
-def get_similars_progress() -> tuple[int, int] | None:
-    """Place of the latest fetched seed among the seeds, and how many seeds there are."""
+def get_similars_progress() -> dict | None:
+    """How many seeds are fetched out of how many, and the place of the latest fetched one."""
     seed_ids = _get_seed_ids()
-    latest_id = (
+    fetched_ids = list(
         Artist.objects.filter(id__in=seed_ids, similars_at__isnull=False)
         .order_by('-similars_at')
         .values_list('id', flat=True)
-        .first()
     )
-    if latest_id is None:
+    if not fetched_ids:
         return None
-    return seed_ids.index(latest_id) + 1, len(seed_ids)
+    return {
+        'done': len(fetched_ids),
+        'total': len(seed_ids),
+        'latest': seed_ids.index(fetched_ids[0]) + 1,
+    }
 
 
 def update_next_similar_artist():
@@ -60,9 +63,18 @@ def update_next_similar_artist():
         logger.info('🎵 LastFM disabled, not updating similar artists')
         return
 
+    seed_ids = _get_seed_ids()
+    # an artist fallen out of the seeds no longer recommends; it is fetched anew if it comes back
+    count_dropped, _ = Similar.objects.exclude(artist_id__in=seed_ids).delete()
+    Artist.objects.exclude(id__in=seed_ids).filter(similars_at__isnull=False).update(
+        similars_at=None
+    )
+    if count_dropped:
+        logger.info(f'🎵 Dropped similar artists of former seeds: deleted={count_dropped}')
+
     # never fetched comes first, best seed first; after that the oldest fetch is redone
     seed = (
-        Artist.objects.filter(id__in=_get_seed_ids())
+        Artist.objects.filter(id__in=seed_ids)
         .order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
         .first()
     )

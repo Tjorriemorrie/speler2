@@ -170,7 +170,10 @@ without requiring the user to repeat the information later.
   trigger again, or it loops. Reuse this for any other slow external call on page load.
 - Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of artists by `SIMILARS_SEED_ORDERING`
   (ends in `id` so places are stable for the `n/total` progress). Never fetched goes first, then
-  the oldest `similars_at` is redone; a refetch deletes that seed's `Similar` rows first.
+  the oldest `similars_at` is redone; a refetch deletes that seed's `Similar` rows first. An
+  artist that falls out of the seeds has its rows deleted and `similars_at` cleared on the next
+  update, so it stops recommending and is fetched first if it comes back. Progress shows
+  `(done/total)` during the first pass, then `(total done - redid #n)`.
 - `Artist.similars_at` marks a seed done even with zero results; the rows can't be the marker
   because removing a recommendation deletes them. Last.fm "not found" (`WSError` status `'6'`, a
   string) is final; any other `PyLastError` (5xx carry an int status) leaves the artist for retry.
