@@ -14,14 +14,15 @@ from django.utils.cache import patch_cache_control
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 from mutagen import MutagenError
+from pylast import PyLastError
 
 from main.constants import GENRE_CHOICES
+from main.discography import get_review_artist, get_unowned_top_albums
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lastfm_service import (
     get_recommended_song,
     get_similars_progress,
-    scrape_studio_albums,
     update_next_similar_song,
 )
 from main.lyrics import BrowserCheckError, search_azlyrics
@@ -455,23 +456,26 @@ def similars_view(request):
 
 
 def similars_missing_albums_view(request):
-    """List missing albums from last updated artist."""
-    ctx = {}
-    refresh = request.GET.get('refresh')
+    """Show the stand-out songs not owned from the top albums of the artist under review."""
+    artist = get_review_artist(refresh=request.GET.get('refresh') == 'ad')
+    ctx = {'artist': artist}
 
-    album_details_key = 'sim_album_details'
-    refresh_ad = refresh == 'ad'
-    if refresh_ad or not (wiki_details := cache.get(album_details_key)):
+    # only plain dicts are cached, the artist row is read fresh on every render
+    cache_key = f'artist_top_albums_{artist.id}'
+    if (albums := cache.get(cache_key)) is None:
         try:
-            wiki_details = scrape_studio_albums(refresh=refresh_ad)
-            cache.set(album_details_key, wiki_details, timeout=3600 * 16)
-        except Exception as exc:
-            logger.exception('Could not find album details')
-            wiki_details = {'error': str(exc)}
-    ctx['wiki_details'] = wiki_details
+            albums = get_unowned_top_albums(artist)
+            cache.set(cache_key, albums, timeout=3600 * 16)
+        except PyLastError as exc:
+            logger.warning(
+                f'⚠️ Fetching top albums from LastFM failed: artist={artist.name}, error={exc}'
+            )
+            ctx['error'] = str(exc)
+            albums = []
+    ctx['albums'] = albums
 
-    response = render(request, 'main/snippet_similars_missing_albums.html', ctx)
-    return response
+    logger.info(f'🎵 Rendered artist top albums: artist={artist.name}, albums={len(albums)}')
+    return render(request, 'main/snippet_similars_missing_albums.html', ctx)
 
 
 def similars_recommended_view(request):

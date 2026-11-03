@@ -133,6 +133,14 @@ without requiring the user to repeat the information later.
 
 ## Similar songs (last.fm)
 
+- `main/lastfm_service.py` only calls last.fm endpoints and returns plain data (titles,
+  playcounts, urls); business logic built on them lives in other modules (e.g.
+  `main/discography.py`). The older similars code there predates this rule.
+- "More from artist" (`discography.py`) reuses `Artist.disco_at` as the reviewed marker. It
+  skips top albums whose name matches an owned one by `track_slug` (so "(Deluxe Edition)" still
+  counts as owned) and keeps the unowned tracks above the album's mean last.fm playcount. Use
+  the mean, not mean + stdev: playcounts are skewed so hard that the stdev leaves only the hit.
+  The Wikipedia scraper (`scrape_studio_albums`) is kept but no longer wired to a view.
 - Render first, fetch after: `snippet_similars_recommended.html` renders from the stored `Similar`
   rows, and only when `refreshed` is false carries an `hx-trigger="load"` element that re-requests
   the view with `?refresh=1`, which fetches one seed song. The refresh render must not carry the

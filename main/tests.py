@@ -12,11 +12,15 @@ from django.utils import timezone
 from django.utils.text import slugify
 from unidecode import unidecode
 
+from main.discography import get_unowned_top_albums
 from main.lastfm_service import (
     SIMILARS_FETCH_ATTEMPTS,
     SIMILARS_KEEP_LIMIT,
     artist_slug,
     extract_albums_from_table,
+    get_album_tracks,
+    get_artist_top_albums,
+    get_artist_top_tracks,
     get_recommended_song,
     scrobble,
     track_slug,
@@ -36,6 +40,7 @@ from main.templatetags.fmt import days_ago
 from main.views import (
     similars_bad_albums,
     similars_bad_artists,
+    similars_missing_albums_view,
     similars_recommended_view,
     similars_remove_song,
 )
@@ -699,6 +704,105 @@ def test_remove_song_deletes_only_that_track(mock_update, rf, seed_songs):
     assert 'Solo Band' in response.content.decode('utf-8')
 
 
+# more from artist: stand-out songs of the top albums not owned
+
+
+def test_lastfm_endpoints_return_plain_data(lastfm):
+    """Top tracks, top albums and album tracks come back without pylast types."""
+    artist = lastfm.get_artist.return_value
+    artist.get_top_tracks.return_value = [
+        pylast.TopItem(SimpleNamespace(title='Hit'), '12'),
+    ]
+    artist.get_top_albums.return_value = [
+        pylast.TopItem(SimpleNamespace(title='Album', get_url=lambda: 'url'), '34'),
+    ]
+    lastfm.get_album.return_value.get_tracks.return_value = [SimpleNamespace(title='Hit')]
+
+    fetched = (
+        get_artist_top_tracks('Band', 5),
+        get_artist_top_albums('Band', 5),
+        get_album_tracks('Band', 'Album'),
+    )
+
+    assert fetched == ([('Hit', 12)], [('Album', 34, 'url')], ['Hit'])
+
+
+@pytest.fixture()
+def lastfm_albums():
+    """Seed Artist on last.fm: Seed Album owned (as a deluxe edition), New Album not."""
+    album_tracks = {'New Album': ["Top Song's", 'Deep Cut', 'Hit', 'Filler', 'Unknown']}
+    with (
+        patch('main.discography.get_artist_top_tracks', autospec=True) as mock_tracks,
+        patch('main.discography.get_artist_top_albums', autospec=True) as mock_albums,
+        patch('main.discography.get_album_tracks', autospec=True) as mock_album_tracks,
+    ):
+        mock_tracks.return_value = [
+            ("Top Song's", 900),
+            ('Hit', 500),
+            ('Deep Cut', 400),
+            ('Filler', 10),
+        ]
+        mock_albums.return_value = [
+            ('Seed Album (Deluxe Edition)', 1000, 'url-seed'),
+            ('New Album', 800, 'url-new'),
+        ]
+        # an owned album is never looked up, so it has no tracks here
+        mock_album_tracks.side_effect = lambda artist, title: album_tracks[title]
+        yield album_tracks
+
+
+def test_top_albums_keep_unowned_tracks_above_album_mean(lastfm_albums, seed_songs):
+    """The owned album and owned track are skipped, the rest above the mean kept best first."""
+    top, _ = seed_songs
+
+    albums = get_unowned_top_albums(top.artist)
+
+    assert albums == [
+        {
+            'name': 'New Album',
+            'playcount': 800,
+            'url': 'url-new',
+            'tracks': [{'name': 'Hit', 'playcount': 500}, {'name': 'Deep Cut', 'playcount': 400}],
+        }
+    ]
+
+
+def test_top_albums_drop_album_without_stand_out_tracks(lastfm_albums, seed_songs):
+    """A one track album has nothing above its own mean."""
+    top, _ = seed_songs
+    lastfm_albums['New Album'] = ['Hit']
+
+    assert get_unowned_top_albums(top.artist) == []
+
+
+@patch('main.views.get_unowned_top_albums', autospec=True, return_value=[])
+def test_artist_albums_view_refresh_moves_to_next_artist(mock_albums, rf, seed_songs):
+    """The artist is marked reviewed and the one reviewed longest ago after it is shown."""
+    Artist.objects.filter(slug='maneskin').update(disco_at=timezone.now())
+
+    response = similars_missing_albums_view(rf.get('/similars/missing_albums/?refresh=ad'))
+
+    assert 'Måneskin' in response.content.decode('utf-8')
+
+
+@patch('main.views.get_unowned_top_albums', autospec=True, return_value=[])
+def test_artist_albums_view_says_when_nothing_found(mock_albums, rf, seed_songs):
+    """No albums left is stated, not left blank."""
+    response = similars_missing_albums_view(rf.get('/similars/missing_albums/'))
+
+    assert 'No other stand-out songs' in response.content.decode('utf-8')
+
+
+@patch('main.views.get_unowned_top_albums', autospec=True)
+def test_artist_albums_view_shows_lastfm_error(mock_albums, rf, seed_songs):
+    """A last.fm failure is shown in the column."""
+    mock_albums.side_effect = pylast.WSError(None, '8', 'Operation failed')
+
+    response = similars_missing_albums_view(rf.get('/similars/missing_albums/'))
+
+    assert 'Operation failed' in response.content.decode('utf-8')
+
+
 # get_next_song: skipping unplayed songs while the history window is short
 
 
@@ -868,8 +972,8 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     with caplog.at_level('INFO', logger='main.plays'):
         get_next_song()
 
-    # backlog of 1 over 1 slot, less the 5 spaces per artist
-    assert any('-> -4.00' in m for m in caplog.messages)
+    # backlog of 1 over 1 slot, less the 4 spaces per artist
+    assert any('-> -3.00' in m for m in caplog.messages)
 
 
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)

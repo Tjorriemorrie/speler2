@@ -1,10 +1,11 @@
 {% load fmt %}
 
+<!-- stand-out songs not owned from the last.fm top albums of the artist under review -->
 <h4 class="d-flex align-items-center gap-2">
-    Albums listing of artist
+    More from artist
 
     <button class="btn btn-sm btn-outline-primary border-0 p-1"
-            title="Refresh"
+            title="Reviewed, next artist"
             hx-get="{% url 'similars_missing_albums' %}?refresh=ad"
             hx-trigger="click"
             hx-target="#similars_missing_albums"
@@ -14,29 +15,42 @@
     </button>
 </h4>
 
-{% if wiki_details.artist %}
+{% if artist %}
     <h5 class="my-3">
-        <a class="no-blue" href="{{ wiki_details.artist.wiki_link }}" target="_blank">
-            <i class="bi bi-wikipedia"></i>
-        </a>
-        <a class="no-blue artist-font" href="#"
-           hx-get="{% url 'artist' wiki_details.artist.id %}"
+        <a class="no-blue" href="#"
+           hx-get="{% url 'artist' artist.id %}"
            hx-target="#main-container"
            hx-swap="innerHTML">
-            {{ wiki_details.artist.name }}
+            <em class="artist-font">{{ artist.name }}</em>
         </a>
     </h5>
 {% endif %}
 
-{% if wiki_details.error %}
-    <div class="alert alert-danger">{{ wiki_details.error }}</div>
+{% if error %}
+    <div class="alert alert-danger">{{ error }}</div>
+{% elif not albums %}
+    <p>No other stand-out songs on last.fm.</p>
 {% endif %}
 
-{% for album_info in wiki_details.albums %}
-    <p>
-        {% if album_info.own %}<i class="bi bi-check"></i>{% else %}
-            <i class="bi bi-x"></i>{% endif %}
-        {{ album_info.year }} - {{ album_info.name }}
-        {% if album_info.href %}<a href="{{ album_info.href }}" target="_blank">Link</a>{% endif %}
-    </p>
+{% for album in albums %}
+    <h6 class="mt-3 mb-1">
+        <a class="no-blue album-font" href="{{ album.url }}" target="_blank">{{ album.name }}</a>
+        <span class="text-muted small">{{ album.playcount|intspace }} plays</span>
+    </h6>
+    <table class="table table-sm table-striped table-hover">
+        <thead>
+        <tr>
+            <th>Plays</th>
+            <th>Song</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for track in album.tracks %}
+            <tr>
+                <td class="small">{{ track.playcount|intspace }}</td>
+                <td>{{ track.name }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
 {% endfor %}

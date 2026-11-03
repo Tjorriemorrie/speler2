@@ -66,7 +66,9 @@ place in the top 10% in brackets, e.g. `(156/987)`.
 Last.fm matches titles literally (curly `’` fails where `'` works); unknown tracks are `WSError` `'6'`.
 pylast fixes its timeout (5s connect, 10s read), so this fetch retries network errors 3×; scrobbles don't.
 
-It also checks wikipedia for artist info if you have missed an album (beta), and lists the lowest
+"More from artist" takes the artist reviewed longest ago and lists, for up to 3 of their last.fm top
+albums you don't own, the songs not owned that are played above that album's mean (at most 6).
+Refresh marks the artist reviewed for 30 days per album owned and moves on. It also lists the lowest
 rated albums as removal candidates (8, one ratings window of slots). An album is struck through while
 any song on it has fewer than 2 plays or 10 ratings (not had a fair chance yet; 5 ratings per play).
 Those songs get +1 play priority, so the list clears quickly; it is re-read every 30 minutes.

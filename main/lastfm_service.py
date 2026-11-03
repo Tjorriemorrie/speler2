@@ -268,6 +268,29 @@ def get_recommended_song() -> dict | None:
     return best
 
 
+def get_artist_top_tracks(artist_name: str, limit: int) -> list[tuple[str, int]]:
+    """Get the artist's most played tracks as (title, playcount)."""
+    top_tracks = get_network().get_artist(artist_name).get_top_tracks(limit=limit)
+    logger.info(f'🎵 Fetched artist top tracks: artist={artist_name}, count={len(top_tracks)}')
+    return [(top.item.title, int(top.weight)) for top in top_tracks]
+
+
+def get_artist_top_albums(artist_name: str, limit: int) -> list[tuple[str, int, str]]:
+    """Get the artist's most played albums as (title, playcount, url)."""
+    top_albums = get_network().get_artist(artist_name).get_top_albums(limit=limit)
+    logger.info(f'🎵 Fetched artist top albums: artist={artist_name}, count={len(top_albums)}')
+    return [(top.item.title, int(top.weight), top.item.get_url()) for top in top_albums]
+
+
+def get_album_tracks(artist_name: str, album_title: str) -> list[str]:
+    """Get the titles of the album's tracks."""
+    tracks = get_network().get_album(artist_name, album_title).get_tracks()
+    logger.info(
+        f'🎵 Fetched album tracks: artist={artist_name}, album={album_title}, count={len(tracks)}'
+    )
+    return [track.title for track in tracks]
+
+
 # class LastFm(LastFMNetwork):
 #     love_cutoff = 0.97
 #
