@@ -691,7 +691,7 @@ def test_update_similars_retries_after_outage(similar_artists, seed_artists):
 def test_update_similars_seeds_only_top_decile(similar_artists, seed_artists):
     """An artist outside the top decile is never fetched, the fetched top one is redone instead."""
     seed, _ = seed_artists
-    seed.similars_at = timezone.now()
+    seed.similars_at = timezone.now() - timedelta(days=2)
     seed.save()
 
     update_next_similar_artist()
@@ -715,12 +715,22 @@ def test_update_similars_refetches_oldest_seed(similar_artists, seed_artists, mo
     """Once every seed is fetched, the one fetched longest ago is fetched again."""
     monkeypatch.setattr('main.similars.SIMILARS_SEED_SHARE', 1)
     _, owned = seed_artists
-    Artist.objects.update(similars_at=timezone.now())
-    Artist.objects.filter(id=owned.id).update(similars_at=timezone.now() - timedelta(days=1))
+    Artist.objects.update(similars_at=timezone.now() - timedelta(days=2))
+    Artist.objects.filter(id=owned.id).update(similars_at=timezone.now() - timedelta(days=3))
 
     update_next_similar_artist()
 
     similar_artists.assert_called_once_with('Måneskin', SIMILARS_FETCH_LIMIT)
+
+
+def test_update_similars_skips_refetch_within_interval(similar_artists, seed_artists):
+    """Once every seed is fetched, nothing is redone within a day of the last fetch."""
+    Artist.objects.update(similars_at=timezone.now() - timedelta(days=2))
+    Artist.objects.filter(name='Seed Artist').update(similars_at=timezone.now())
+
+    update_next_similar_artist()
+
+    similar_artists.assert_not_called()
 
 
 def test_update_similars_refetch_replaces_old_artists(similar_artists, seed_artists):

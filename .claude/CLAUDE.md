@@ -176,7 +176,8 @@ without requiring the user to repeat the information later.
   trigger again, or it loops. Reuse this for any other slow external call on page load.
 - Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of artists by `SIMILARS_SEED_ORDERING`
   (ends in `id` so places are stable for the `n/total` progress). Never fetched goes first, then
-  the oldest `similars_at` is redone; a refetch deletes that seed's `Similar` rows first. An
+  the oldest `similars_at` is redone, at most one per `SIMILARS_REFETCH_INTERVAL` (24 h, the
+  pool is only ~20 artists); a refetch deletes that seed's `Similar` rows first. An
   artist that falls out of the seeds has its rows deleted and `similars_at` cleared on the next
   update, so it stops recommending and is fetched first if it comes back. Progress shows
   `(done/total)` during the first pass, then `(total done - redid #n)`.

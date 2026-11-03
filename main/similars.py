@@ -1,5 +1,6 @@
 import logging
 import math
+from datetime import timedelta
 
 import pylast
 from django.conf import settings
@@ -28,6 +29,8 @@ SIMILARS_FETCH_LIMIT = 50
 SIMILARS_SEED_ORDERING = ('-rating', '-count_played', 'id')
 # only the top decile of artists are seeds; once all are fetched they are refetched oldest first
 SIMILARS_SEED_SHARE = 0.1
+# once every seed is fetched, at most one is redone per this interval
+SIMILARS_REFETCH_INTERVAL = timedelta(hours=24)
 # library artists listed under the recommended album as the artists it is similar to
 SIMILARS_ARTISTS_SHOWN = 5
 SIMILARS_CACHE_TIMEOUT = 3600 * 16
@@ -73,10 +76,16 @@ def update_next_similar_artist():
     if count_dropped:
         logger.info(f'🎵 Dropped similar artists of former seeds: deleted={count_dropped}')
 
+    seeds = Artist.objects.filter(id__in=seed_ids)
+    if not seeds.filter(similars_at__isnull=True).exists():
+        refetched_at = seeds.aggregate(latest=Max('similars_at'))['latest']
+        if refetched_at and timezone.now() - refetched_at < SIMILARS_REFETCH_INTERVAL:
+            logger.info(f'🎵 Every seed fetched, last refetch too recent: at={refetched_at}')
+            return
+
     # never fetched comes first, best seed first; after that the oldest fetch is redone
     seed = (
-        Artist.objects.filter(id__in=seed_ids)
-        .order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
+        seeds.order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
         .first()
     )
     if not seed:
