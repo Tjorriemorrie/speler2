@@ -14,7 +14,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from unidecode import unidecode
 
-from main.discography import get_unowned_top_albums
+from main.discography import get_missing_songs
 from main.lastfm_service import (
     artist_slug,
     extract_albums_from_table,
@@ -22,6 +22,7 @@ from main.lastfm_service import (
     get_artist_top_albums,
     get_artist_top_tracks,
     get_similar_artists,
+    get_track_album,
     scrobble,
 )
 from main.models import Album, Artist, History, Rating, Similar, Song
@@ -755,6 +756,7 @@ def lastfm_top_albums():
     with (
         patch('main.similars.get_artist_top_albums', autospec=True) as mock_albums,
         patch('main.similars.get_track_playcounts', autospec=True, return_value={}),
+        patch('main.similars.get_album_tracks', autospec=True, return_value=[]),
         patch('main.similars.get_stand_out_tracks', autospec=True) as mock_tracks,
     ):
         mock_albums.side_effect = lambda name, limit: (
@@ -898,7 +900,7 @@ def test_remove_artist_deletes_only_that_artist(rf, lastfm_top_albums, seed_arti
     assert 'Solo Band Album' in response.content.decode('utf-8')
 
 
-# more from artist: stand-out songs of the top albums not owned
+# more from artist: a new album with its best missing songs, else songs on owned albums
 
 
 def test_lastfm_endpoints_return_plain_data(lastfm):
@@ -911,65 +913,86 @@ def test_lastfm_endpoints_return_plain_data(lastfm):
         pylast.TopItem(SimpleNamespace(title='Album', get_url=lambda: 'url'), '34'),
     ]
     lastfm.get_album.return_value.get_tracks.return_value = [SimpleNamespace(title='Hit')]
+    lastfm.get_track.return_value.get_album.return_value = SimpleNamespace(
+        get_title=lambda: 'Album', get_url=lambda: 'url'
+    )
 
     fetched = (
         get_artist_top_tracks('Band', 5),
         get_artist_top_albums('Band', 5),
         get_album_tracks('Band', 'Album'),
+        get_track_album('Band', 'Hit'),
     )
 
-    assert fetched == ([('Hit', 12)], [('Album', 34, 'url')], ['Hit'])
+    assert fetched == ([('Hit', 12)], [('Album', 34, 'url')], ['Hit'], ('Album', 'url'))
+
+
+def test_track_album_none_when_lastfm_has_none(lastfm):
+    """A track last.fm puts on no album gives None."""
+    lastfm.get_track.return_value.get_album.return_value = None
+
+    assert get_track_album('Band', 'Hit') is None
 
 
 @pytest.fixture()
-def lastfm_albums():
+def lastfm_missing():
     """Seed Artist on last.fm: Seed Album owned (as a deluxe edition), New Album not."""
-    album_tracks = {'New Album': ["Top Song's", 'Deep Cut', 'Hit', 'Filler', 'Unknown']}
+    track_albums = {
+        'Hit': ('Seed Album (Deluxe Edition)', 'url-seed'),
+        'Deep Cut': ('New Album', 'url-new'),
+        'Other': ('New Album', 'url-new'),
+        'Filler': ('New Album', 'url-new'),
+    }
     with (
         patch('main.discography.get_artist_top_tracks', autospec=True) as mock_tracks,
-        patch('main.discography.get_artist_top_albums', autospec=True) as mock_albums,
+        patch('main.discography.get_track_album', autospec=True) as mock_track_album,
         patch('main.discography.get_album_tracks', autospec=True) as mock_album_tracks,
     ):
         mock_tracks.return_value = [
             ("Top Song's", 900),
             ('Hit', 500),
+            ('Hit (Live)', 450),
             ('Deep Cut', 400),
+            ('Other', 300),
             ('Filler', 10),
         ]
-        mock_albums.return_value = [
-            ('Seed Album (Deluxe Edition)', 1000, 'url-seed'),
-            ('New Album', 800, 'url-new'),
-        ]
-        # an owned album is never looked up, so it has no tracks here
-        mock_album_tracks.side_effect = lambda artist, title: album_tracks[title]
-        yield album_tracks
+        mock_track_album.side_effect = lambda artist, title: track_albums[title]
+        mock_album_tracks.side_effect = lambda artist, title: (
+            ['Deep Cut'] if title == 'Single' else ['Deep Cut', 'Other', 'Filler', 'Unknown']
+        )
+        yield track_albums
 
 
-def test_top_albums_keep_unowned_tracks_above_album_mean(lastfm_albums, seed_songs):
-    """The owned album and owned track are skipped, the rest above the mean kept best first."""
+def test_missing_songs_suggest_first_new_album(lastfm_missing, seed_songs):
+    """Owned songs and albums are passed over; the new album leads with the song that found it."""
     top, _ = seed_songs
 
-    albums = get_unowned_top_albums(top.artist)
-
-    assert albums == [
-        {
+    assert get_missing_songs(top.artist) == {
+        'album': {
             'name': 'New Album',
-            'playcount': 800,
             'url': 'url-new',
-            'tracks': [{'name': 'Hit', 'playcount': 500}, {'name': 'Deep Cut', 'playcount': 400}],
-        }
-    ]
+            'tracks': [
+                {'name': 'Deep Cut', 'playcount': 400},
+                {'name': 'Other', 'playcount': 300},
+            ],
+        },
+        'songs': [],
+    }
 
 
-def test_top_albums_drop_album_without_stand_out_tracks(lastfm_albums, seed_songs):
-    """A one track album has nothing above its own mean."""
+def test_missing_songs_on_owned_albums_listed(lastfm_missing, seed_songs):
+    """A single or no album is no new album; only the songs on owned albums are listed."""
     top, _ = seed_songs
-    lastfm_albums['New Album'] = ['Hit']
+    lastfm_missing['Deep Cut'] = ('Single', 'url-single')
+    lastfm_missing['Other'] = None
 
-    assert get_unowned_top_albums(top.artist) == []
+    assert get_missing_songs(top.artist) == {
+        'album': None,
+        'songs': [{'name': 'Hit', 'playcount': 500, 'album': 'Seed Album (Deluxe Edition)'}],
+    }
 
 
-@patch('main.views.get_unowned_top_albums', autospec=True, return_value=[])
+@patch('main.views.get_missing_songs', autospec=True, return_value={'album': None, 'songs': []})
 def test_artist_albums_view_refresh_moves_to_next_artist(mock_albums, rf, seed_songs):
     """The artist is marked reviewed and the one reviewed longest ago after it is shown."""
     Artist.objects.filter(slug='maneskin').update(disco_at=timezone.now())
@@ -979,7 +1002,7 @@ def test_artist_albums_view_refresh_moves_to_next_artist(mock_albums, rf, seed_s
     assert 'Måneskin' in response.content.decode('utf-8')
 
 
-@patch('main.views.get_unowned_top_albums', autospec=True, return_value=[])
+@patch('main.views.get_missing_songs', autospec=True, return_value={'album': None, 'songs': []})
 def test_artist_albums_view_says_when_nothing_found(mock_albums, rf, seed_songs):
     """No albums left is stated, not left blank."""
     response = similars_missing_albums_view(rf.get('/similars/missing_albums/'))
@@ -987,7 +1010,7 @@ def test_artist_albums_view_says_when_nothing_found(mock_albums, rf, seed_songs)
     assert 'No other stand-out songs' in response.content.decode('utf-8')
 
 
-@patch('main.views.get_unowned_top_albums', autospec=True)
+@patch('main.views.get_missing_songs', autospec=True)
 def test_artist_albums_view_shows_lastfm_error(mock_albums, rf, seed_songs):
     """A last.fm failure is shown in the column."""
     mock_albums.side_effect = pylast.WSError(None, '8', 'Operation failed')

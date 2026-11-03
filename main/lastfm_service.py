@@ -130,6 +130,15 @@ def get_artist_top_albums(artist_name: str, limit: int) -> list[tuple[str, int, 
     return [(top.item.title, int(top.weight), top.item.get_url()) for top in top_albums]
 
 
+def get_track_album(artist_name: str, title: str) -> tuple[str, str] | None:
+    """Get the (title, url) of the album last.fm puts the track on, None when it has none."""
+    album = get_network().get_track(artist_name, title).get_album()
+    logger.info(f'🎵 Fetched track album: artist={artist_name}, track={title}, album={album}')
+    if album is None:
+        return None
+    return album.get_title(), album.get_url()
+
+
 def get_album_tracks(artist_name: str, album_title: str) -> list[str]:
     """Get the titles of the album's tracks."""
     tracks = get_network().get_album(artist_name, album_title).get_tracks()

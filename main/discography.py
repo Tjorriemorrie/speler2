@@ -8,8 +8,8 @@ from django.utils import timezone
 from main.lastfm_service import (
     _owned_tracks,
     get_album_tracks,
-    get_artist_top_albums,
     get_artist_top_tracks,
+    get_track_album,
     straighten_quotes,
     track_slug,
 )
@@ -17,11 +17,13 @@ from main.models import Artist
 
 logger = logging.getLogger(__name__)
 
-ARTIST_TOP_ALBUMS_LIMIT = 10
 # top tracks only give the play counts; an album track missing from them counts as 0
 ARTIST_TOP_TRACKS_LIMIT = 200
-ARTIST_ALBUMS_SHOWN = 3
 ARTIST_ALBUM_TRACKS_SHOWN = 6
+# the best missing songs whose album is looked up, and listed when all are on owned albums
+MISSING_SONGS_CHECKED = 3
+# fewer tracks is a single or an EP, not an album worth suggesting
+MIN_ALBUM_TRACKS = 4
 
 
 def _next_review_artist() -> Artist:
@@ -49,11 +51,15 @@ def get_track_playcounts(artist_name: str) -> dict[str, int]:
 
 
 def get_stand_out_tracks(
-    artist_name: str, album_title: str, playcounts: dict[str, int], owned: set[str]
+    artist_name: str,
+    album_title: str,
+    track_names: list[str],
+    playcounts: dict[str, int],
+    owned: set[str],
 ) -> list[dict]:
     """Get the album's tracks played more than its mean, best first, without the owned slugs."""
     tracks = {}
-    for track_name in get_album_tracks(artist_name, album_title):
+    for track_name in track_names:
         tracks.setdefault(track_slug(track_name), track_name)
     # last.fm counts are skewed to the hits, so the mean leaves the few stand-out tracks
     cutoff = mean(playcounts.get(slug, 0) for slug in tracks) if tracks else 0
@@ -73,22 +79,46 @@ def get_stand_out_tracks(
     return kept
 
 
-def get_unowned_top_albums(artist: Artist) -> list[dict]:
-    """Get the artist's top albums not owned, each with its stand-out tracks not owned."""
+def get_missing_songs(artist: Artist) -> dict:
+    """Suggest the album of the first best missing song not owned, else those missing songs.
+
+    The album comes with that song and the next best of its stand-out tracks not owned, up to
+    MISSING_SONGS_CHECKED in all. When every checked song is on an owned album, those songs are
+    listed with their albums instead. A song on no album or on one under MIN_ALBUM_TRACKS is
+    checked but not listed.
+    """
     name = straighten_quotes(artist.name)
-    playcounts = get_track_playcounts(name)
+    top_tracks = get_artist_top_tracks(name, ARTIST_TOP_TRACKS_LIMIT)
+    playcounts = {track_slug(title): playcount for title, playcount in top_tracks}
     owned_albums = {track_slug(album) for album in artist.albums.values_list('name', flat=True)}
     owned_tracks = {slug for _, slug in _owned_tracks({artist.slug})}
 
-    albums = []
-    for title, album_playcount, url in get_artist_top_albums(name, ARTIST_TOP_ALBUMS_LIMIT):
-        if track_slug(title) in owned_albums:
-            logger.info(f'🎵 Skipped owned album: artist={artist.name}, album={title}')
+    songs = []
+    checked = set()
+    for title, playcount in top_tracks:
+        slug = track_slug(title)
+        if slug in owned_tracks or slug in checked:
             continue
-        kept = get_stand_out_tracks(name, title, playcounts, owned_tracks)
-        if not kept:
-            continue
-        albums.append({'name': title, 'playcount': album_playcount, 'url': url, 'tracks': kept})
-        if len(albums) == ARTIST_ALBUMS_SHOWN:
+        checked.add(slug)
+        song = {'name': title, 'playcount': playcount}
+        if (album := get_track_album(name, title)) is None:
+            logger.info(f'🎵 Skipped song without album: artist={artist.name}, song={title}')
+        elif track_slug(album[0]) in owned_albums:
+            songs.append({**song, 'album': album[0]})
+        elif len(track_names := get_album_tracks(name, album[0])) < MIN_ALBUM_TRACKS:
+            logger.info(
+                f'🎵 Skipped short album: artist={artist.name}, album={album[0]}, '
+                f'tracks={len(track_names)}'
+            )
+        else:
+            album_title, url = album
+            others = get_stand_out_tracks(
+                name, album_title, track_names, playcounts, owned_tracks | {slug}
+            )
+            tracks = [song, *others][:MISSING_SONGS_CHECKED]
+            logger.info(f'🎵 Suggested new album: artist={artist.name}, album={album_title}')
+            return {'album': {'name': album_title, 'url': url, 'tracks': tracks}, 'songs': []}
+        if len(checked) == MISSING_SONGS_CHECKED:
             break
-    return albums
+    logger.info(f'🎵 Suggested songs on owned albums: artist={artist.name}, songs={len(songs)}')
+    return {'album': None, 'songs': songs}

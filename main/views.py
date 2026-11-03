@@ -17,7 +17,7 @@ from mutagen import MutagenError
 from pylast import PyLastError
 
 from main.constants import GENRE_CHOICES
-from main.discography import get_review_artist, get_unowned_top_albums
+from main.discography import get_missing_songs, get_review_artist
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
 from main.forms import URLForm
 from main.lyrics import BrowserCheckError, search_azlyrics
@@ -467,25 +467,28 @@ def similars_view(request):
 
 
 def similars_missing_albums_view(request):
-    """Show the stand-out songs not owned from the top albums of the artist under review."""
+    """Show a new album to get, else the best songs missing from owned albums, of the artist."""
     artist = get_review_artist(refresh=request.GET.get('refresh') == 'ad')
     ctx = {'artist': artist}
 
     # only plain dicts are cached, the artist row is read fresh on every render
-    cache_key = f'artist_top_albums_{artist.id}'
-    if (albums := cache.get(cache_key)) is None:
+    cache_key = f'artist_missing_songs_{artist.id}'
+    if (missing := cache.get(cache_key)) is None:
         try:
-            albums = get_unowned_top_albums(artist)
-            cache.set(cache_key, albums, timeout=3600 * 16)
+            missing = get_missing_songs(artist)
+            cache.set(cache_key, missing, timeout=3600 * 16)
         except PyLastError as exc:
             logger.warning(
-                f'⚠️ Fetching top albums from LastFM failed: artist={artist.name}, error={exc}'
+                f'⚠️ Fetching missing songs from LastFM failed: artist={artist.name}, error={exc}'
             )
             ctx['error'] = str(exc)
-            albums = []
-    ctx['albums'] = albums
+            missing = {'album': None, 'songs': []}
+    ctx.update(missing)
 
-    logger.info(f'🎵 Rendered artist top albums: artist={artist.name}, albums={len(albums)}')
+    logger.info(
+        f'🎵 Rendered artist missing songs: artist={artist.name}, '
+        f'album={missing["album"] and missing["album"]["name"]}, songs={len(missing["songs"])}'
+    )
     return render(request, 'main/snippet_similars_missing_albums.html', ctx)
 
 

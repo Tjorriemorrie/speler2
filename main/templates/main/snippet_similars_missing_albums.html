@@ -1,6 +1,6 @@
 {% load fmt %}
 
-<!-- stand-out songs not owned from the last.fm top albums of the artist under review -->
+<!-- a new album with its best missing songs, else the best songs missing from owned albums -->
 <h4 class="d-flex align-items-center gap-2">
     More from artist
 
@@ -28,14 +28,9 @@
 
 {% if error %}
     <div class="alert alert-danger">{{ error }}</div>
-{% elif not albums %}
-    <p>No other stand-out songs on last.fm.</p>
-{% endif %}
-
-{% for album in albums %}
+{% elif album %}
     <h6 class="mt-3 mb-1">
         <a class="no-blue album-font" href="{{ album.url }}" target="_blank">{{ album.name }}</a>
-        <span class="text-muted small">{{ album.playcount|intspace }} plays</span>
     </h6>
     <table class="table table-sm table-striped table-hover">
         <thead>
@@ -53,4 +48,25 @@
         {% endfor %}
         </tbody>
     </table>
-{% endfor %}
+{% elif songs %}
+    <table class="table table-sm table-striped table-hover">
+        <thead>
+        <tr>
+            <th>Plays</th>
+            <th>Song</th>
+            <th>Album</th>
+        </tr>
+        </thead>
+        <tbody>
+        {% for song in songs %}
+            <tr>
+                <td class="small">{{ song.playcount|intspace }}</td>
+                <td>{{ song.name }}</td>
+                <td>{{ song.album }}</td>
+            </tr>
+        {% endfor %}
+        </tbody>
+    </table>
+{% else %}
+    <p>No other stand-out songs on last.fm.</p>
+{% endif %}

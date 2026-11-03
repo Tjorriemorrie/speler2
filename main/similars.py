@@ -12,6 +12,7 @@ from main.discography import get_stand_out_tracks, get_track_playcounts
 from main.lastfm_service import (
     _owned_artists,
     artist_slug,
+    get_album_tracks,
     get_artist_top_albums,
     get_similar_artists,
     straighten_quotes,
@@ -184,7 +185,13 @@ def get_recommended_album() -> dict | None:
     cache_key = f'similars_album_tracks_{best["artist_slug"]}'
     if (tracks := cache.get(cache_key)) is None:
         name = straighten_quotes(best['artist_name'])
-        tracks = get_stand_out_tracks(name, best['name'], get_track_playcounts(name), set())
+        tracks = get_stand_out_tracks(
+            name,
+            best['name'],
+            get_album_tracks(name, best['name']),
+            get_track_playcounts(name),
+            set(),
+        )
         cache.set(cache_key, tracks, timeout=SIMILARS_CACHE_TIMEOUT)
     best['tracks'] = tracks
     best['artists'] = list(

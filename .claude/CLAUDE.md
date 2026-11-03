@@ -149,11 +149,16 @@ without requiring the user to repeat the information later.
 - `main/lastfm_service.py` only calls last.fm endpoints and returns plain data (titles,
   playcounts, urls); business logic built on them lives in other modules (`main/discography.py`,
   `main/similars.py`).
-- "More from artist" (`discography.py`) reuses `Artist.disco_at` as the reviewed marker. It
-  skips top albums whose name matches an owned one by `track_slug` (so "(Deluxe Edition)" still
-  counts as owned) and keeps the unowned tracks above the album's mean last.fm playcount
-  (`get_stand_out_tracks`). Use the mean, not mean + stdev: playcounts are skewed so hard that
-  the stdev leaves only the hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no
+- "More from artist" (`discography.py`, `get_missing_songs`) reuses `Artist.disco_at` as the
+  reviewed marker. It walks the artist's top tracks not owned, best first, looking up each one's
+  album (`track.getInfo`, one call per song) for up to `MISSING_SONGS_CHECKED` (3) songs. The
+  first song on an album not owned (matched by `track_slug`, so "(Deluxe Edition)" still counts as
+  owned) wins: only that album is shown, with that song plus its next best stand-out tracks, 3 in
+  all. If every checked song is on an owned album, those songs are listed with their albums. A
+  song last.fm puts on no album, or on one under `MIN_ALBUM_TRACKS` (4: last.fm often files a hit
+  under its single), uses up a check but isn't listed. Stand-out tracks are the unowned
+  tracks above the album's mean last.fm playcount (`get_stand_out_tracks`). Use the mean, not
+  mean + stdev: playcounts are skewed so hard that the stdev leaves only the hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no
   longer wired to a view.
 - "Recommended album" (`similars.py`): last.fm has no similar-albums endpoint, so each seed
   artist stores its similar artists (one `artist.getSimilar` call, up to 50, one page) as
