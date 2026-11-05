@@ -65,6 +65,17 @@ COUNTDOWN_WINDOW = 11
 # while the trend is rising the history shrinks towards this, never below it
 COUNTDOWN_MIN_WINDOW = 2
 
+# the listening day starts at this hour, so a late night session still counts as the evening's
+DAY_START_HOUR = 4
+
+
+def get_previous_day_start(now: datetime) -> datetime:
+    """Start of the listening day before the one `now` falls in, in `now`'s timezone."""
+    day_start = now.replace(hour=DAY_START_HOUR, minute=0, second=0, microsecond=0)
+    if now < day_start:
+        day_start -= timedelta(days=1)
+    return day_start - timedelta(days=1)
+
 
 def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PLR0915
     """Get next song to play, never one of `exclude_ids`."""
@@ -99,6 +110,10 @@ def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PL
     # Annotate priority
     weight_played_once = 0.26
     weight_bad_album = 1.0
+    # songs heard since the previous listening day began, in the user's timezone (set per
+    # request by the timezone middleware), so yesterday's songs don't come straight back
+    weight_played_recently = -0.5
+    played_recently_since = get_previous_day_start(timezone.localtime())
     songs_with_priority = (
         query.annotate(
             time_since_played=ExpressionWrapper(time_since_played_expr, output_field=FloatField()),
@@ -124,6 +139,14 @@ def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PL
                             | Q(count_rated__lt=BAD_ALBUM_MIN_SONG_RATINGS)
                         ),
                         then=Value(weight_bad_album),
+                    ),
+                    default=Value(0.0),
+                    output_field=FloatField(),
+                )
+                + Case(
+                    When(
+                        played_at__gte=played_recently_since,
+                        then=Value(weight_played_recently),
                     ),
                     default=Value(0.0),
                     output_field=FloatField(),

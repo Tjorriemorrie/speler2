@@ -1,5 +1,6 @@
 import os
-from datetime import timedelta
+import zoneinfo
+from datetime import datetime, timedelta
 from types import SimpleNamespace
 from unittest.mock import patch
 
@@ -27,7 +28,12 @@ from main.lastfm_service import (
 )
 from main.models import Album, Artist, History, Rating, Similar, Song
 from main.musicfiles import recheck_metadata
-from main.plays import MIN_HISTORY_FOR_NEW_SONGS, _slope_steps_remaining, get_next_song
+from main.plays import (
+    MIN_HISTORY_FOR_NEW_SONGS,
+    _slope_steps_remaining,
+    get_next_song,
+    get_previous_day_start,
+)
 from main.ratings import filled_mean, set_match_result
 from main.selectors import (
     get_recent_artists,
@@ -1238,6 +1244,28 @@ def test_bad_albums_are_held_for_the_ratings_window(db):
     _make_song('short', rating=0.5, count_played=3, count_rated=9, days_ago=10)
 
     assert get_next_song() == fair
+
+
+# get_next_song: penalising songs played since the previous listening day began
+
+
+@pytest.mark.parametrize(
+    ('hour', 'expected_day'),
+    [(10, 4), (2, 3)],
+)
+def test_previous_day_starts_at_4am_of_the_listening_day_before(hour, expected_day):
+    """Before 4am the listening day is still yesterday's, so the one before starts earlier."""
+    now = datetime(2026, 11, 5, hour, tzinfo=zoneinfo.ZoneInfo('Africa/Johannesburg'))
+
+    assert get_previous_day_start(now) == now.replace(day=expected_day, hour=4)
+
+
+def test_penalises_songs_played_since_the_previous_day(db):
+    """A song played today loses to a lower rated one played long ago."""
+    _make_song('today', rating=0.9, count_played=1)
+    old = _make_song('old', rating=0.3, count_played=1, days_ago=10)
+
+    assert get_next_song() == old
 
 
 # percentile based rank property
