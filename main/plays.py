@@ -28,7 +28,7 @@ from main.selectors import (
 
 logger = logging.getLogger(__name__)
 
-SPACE_PER_ARTIST = 3
+SPACE_PER_ARTIST = 2
 SONG_LENGTH = 4 * 60
 RATINGS_WINDOW = 30 * 60
 NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
@@ -48,7 +48,10 @@ def _slope_steps_remaining(series: list, smoothed_value: float) -> Union[int, No
 
     Returns None when the series isn't trending down enough to extrapolate
     (too few points, or flat/rising), meaning the countdown is unbounded.
+    The fit starts at the peak: the points before it are the rise, and keeping
+    them would hold the slope positive for a few songs after the turn.
     """
+    series = series[int(np.argmax(series)) :]
     m = (
         np.polyfit(np.arange(len(series)), series, 1)[0]
         if len(series) >= COUNTDOWN_MIN_POINTS

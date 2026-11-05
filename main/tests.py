@@ -1180,6 +1180,11 @@ def test_countdown_extrapolates_from_two_points():
     assert _slope_steps_remaining([0.5, 0.4], 0.4) == 4
 
 
+def test_countdown_fits_only_from_the_peak():
+    """The rise before the peak does not hold the slope up after the turn."""
+    assert _slope_steps_remaining([0.84, 0.89, 0.93, 0.91, 0.86], 0.86) == 25
+
+
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
 def test_countdown_shrinks_while_rising(catalog):
     """An unbounded estimate drops one point more than it adds."""
@@ -1212,8 +1217,8 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     with caplog.at_level('INFO', logger='main.plays'):
         get_next_song()
 
-    # backlog of 1 over 1 slot, less the 3 spaces per artist
-    assert any('-> -2.00' in m for m in caplog.messages)
+    # backlog of 1 over 1 slot, less the 2 spaces per artist
+    assert any('-> -1.00' in m for m in caplog.messages)
 
 
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)
