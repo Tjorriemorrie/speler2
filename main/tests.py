@@ -1206,8 +1206,8 @@ def test_countdown_backlog_uses_only_the_highest_queued_slots(catalog, caplog):
     with caplog.at_level('INFO', logger='main.plays'):
         get_next_song()
 
-    # backlog of 1 over 1 slot, less the 4 spaces per artist
-    assert any('-> -3.00' in m for m in caplog.messages)
+    # backlog of 1 over 1 slot, less the 3 spaces per artist
+    assert any('-> -2.00' in m for m in caplog.messages)
 
 
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', 10)

@@ -28,7 +28,7 @@ from main.selectors import (
 
 logger = logging.getLogger(__name__)
 
-SPACE_PER_ARTIST = 4
+SPACE_PER_ARTIST = 3
 SONG_LENGTH = 4 * 60
 RATINGS_WINDOW = 30 * 60
 NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
