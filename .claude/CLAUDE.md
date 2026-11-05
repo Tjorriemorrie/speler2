@@ -26,8 +26,10 @@ without requiring the user to repeat the information later.
 - If the change revises the last developed change (a fix or follow-up to what the previous commit
   introduced), amend that commit (`git commit --amend`) and push with `--force-with-lease`
   instead of adding a new commit. Anything unrelated gets its own commit.
-- Leave nothing uncommitted: changes that aren't yours (the user's own edits, earlier sessions)
-  get committed too, as their own commit with a message describing them, not folded into yours.
+- Always commit everything: `git add -A`, so the commit includes every change in the working
+  tree, the user's own edits and earlier sessions' leftovers too. Don't split them into separate
+  commits; describe them in the message alongside your own change. After pushing, `git status`
+  must be clean.
 
 ## Testing
 
