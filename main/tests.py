@@ -1284,9 +1284,9 @@ def test_previous_day_starts_at_4am_of_the_listening_day_before(hour, expected_d
 
 
 def test_penalises_songs_played_since_the_previous_day(db):
-    """A song played today loses to a lower rated one played long ago."""
-    _make_song('today', rating=0.9, count_played=1)
-    old = _make_song('old', rating=0.3, count_played=1, days_ago=10)
+    """A top rated song on its one-play bonus still loses to a mid rated one played long ago."""
+    _make_song('today', rating=1.0, count_played=1)
+    old = _make_song('old', rating=0.5, count_played=2, days_ago=10)
 
     assert get_next_song() == old
 

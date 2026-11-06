@@ -134,7 +134,7 @@ without requiring the user to repeat the information later.
 
 ## Recently played penalty
 
-- `get_next_song` takes `0.5` off the priority of songs played since the previous listening day
+- `get_next_song` takes `1.0` off the priority of songs played since the previous listening day
   began: `get_previous_day_start` returns 4am (`DAY_START_HOUR`) of the day before, where a day
   runs from 4am to 4am. It uses the user's timezone, which the middleware activates per request
   from the `django_timezone` cookie, so `timezone.localtime()` is local time in requests (UTC

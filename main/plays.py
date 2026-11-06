@@ -115,7 +115,7 @@ def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PL
     weight_bad_album = 1.0
     # songs heard since the previous listening day began, in the user's timezone (set per
     # request by the timezone middleware), so yesterday's songs don't come straight back
-    weight_played_recently = -0.5
+    weight_played_recently = -1.0
     played_recently_since = get_previous_day_start(timezone.localtime())
     songs_with_priority = (
         query.annotate(
