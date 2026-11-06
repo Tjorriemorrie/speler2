@@ -35,7 +35,7 @@ from main.plays import (
     get_next_song,
     get_previous_day_start,
 )
-from main.ratings import filled_mean, set_match_result
+from main.ratings import filled_mean, get_match, set_match_result
 from main.selectors import (
     get_recent_artists,
     list_lowest_rated_albums,
@@ -271,6 +271,15 @@ def rated_songs(db):
 
 # song ratings 1, 0, 0 make the song mean 1/3, which fills the 2 song album up to 10
 TWO_SONG_ALBUM_RATING = (1 + 0 + 8 / 3) / 10
+
+
+def test_match_falls_back_to_plays_older_than_the_window(rated_songs):
+    """Starting to play after a break still has the latest slot count of plays to rate against."""
+    winner, loser, unrated = rated_songs
+    for song in (loser, unrated):
+        History.objects.create(song=song, played_at=timezone.now() - timedelta(days=1))
+
+    assert set(get_match(winner)) == {winner, loser, unrated}
 
 
 def test_set_match_result_fills_album_and_artist_ratings(rated_songs):

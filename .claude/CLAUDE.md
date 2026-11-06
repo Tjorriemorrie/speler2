@@ -154,6 +154,11 @@ without requiring the user to repeat the information later.
   song delete, the artist on an album delete; `recheck_metadata` marks the album and artist a
   song moved away from. `cleanstats` cascades songs → albums → artists; `--all` redoes every row.
 
+## Next rating
+
+- `get_match` picks from the plays of `get_recent_artists`: the ratings window, or the latest slot
+  count of plays if the window holds fewer, so starting to play after a break still has ratings.
+
 ## Similars (last.fm)
 
 - `main/lastfm_service.py` only calls last.fm endpoints and returns plain data (titles,

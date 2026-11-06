@@ -1,5 +1,4 @@
 import logging
-from datetime import timedelta
 from itertools import combinations
 from typing import Iterable, List, Optional, Type
 
@@ -7,7 +6,7 @@ from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
-from main.models import Album, Artist, History, Rating, Song
+from main.models import Album, Artist, Rating, Song
 
 logger = logging.getLogger(__name__)
 
@@ -47,13 +46,11 @@ def get_artist_rating(artist: Artist, album_mean: float) -> float:
 
 
 def get_recent_songs_from_history() -> List[Song]:
-    """Get recent histories of last half hour, limited to 10."""
-    from main.plays import RATINGS_WINDOW  # noqa: PLC0415  circular import
+    """Get the songs of the plays in the ratings window, but never fewer than the slot count."""
+    from main.selectors import get_recent_artists  # noqa: PLC0415  circular import
 
-    time_ago = timezone.now() - timedelta(seconds=RATINGS_WINDOW)
-    histories = History.objects.prefetch_related('song').filter(played_at__gt=time_ago).all()
     songs = []
-    for h in histories:
+    for h in get_recent_artists().prefetch_related('song'):
         if h.song not in songs:
             songs.append(h.song)
     return songs
