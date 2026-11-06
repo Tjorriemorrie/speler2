@@ -6,7 +6,7 @@
 
     <button class="btn btn-sm btn-outline-primary border-0 p-1"
             title="Reviewed, next artist"
-            hx-get="{% url 'similars_missing_albums' %}?refresh=ad"
+            hx-get="{% url 'similars_missing_albums' %}?reviewed={{ artist.id }}"
             hx-trigger="click"
             hx-target="#similars_missing_albums"
             hx-swap="innerHTML"

@@ -15,7 +15,7 @@ from django.utils import timezone
 from django.utils.text import slugify
 from unidecode import unidecode
 
-from main.discography import get_missing_songs
+from main.discography import get_missing_songs, get_review_artist
 from main.lastfm_service import (
     artist_slug,
     extract_albums_from_table,
@@ -25,6 +25,7 @@ from main.lastfm_service import (
     get_similar_artists,
     get_track_album,
     scrobble,
+    straighten_quotes,
 )
 from main.models import Album, Artist, History, Rating, Similar, Song
 from main.musicfiles import recheck_metadata
@@ -1009,13 +1010,16 @@ def test_missing_songs_on_owned_albums_listed(lastfm_missing, seed_songs):
 
 
 @patch('main.views.get_missing_songs', autospec=True, return_value={'album': None, 'songs': []})
-def test_artist_albums_view_refresh_moves_to_next_artist(mock_albums, rf, seed_songs):
-    """The artist is marked reviewed and the one reviewed longest ago after it is shown."""
-    Artist.objects.filter(slug='maneskin').update(disco_at=timezone.now())
+def test_artist_albums_view_sends_reviewed_artist_to_back(mock_albums, rf, seed_songs):
+    """The artist on screen goes to the back of the queue, not whoever is first in it."""
+    reviewed = Artist.objects.get(slug='maneskin')
+    Artist.objects.filter(slug='seed-artist').update(disco_at=timezone.now())
+    Artist.objects.filter(id=reviewed.id).update(disco_at=timezone.now() + timedelta(days=99))
+    similars_missing_albums_view(rf.get(f'/similars/missing_albums/?reviewed={reviewed.id}'))
 
-    response = similars_missing_albums_view(rf.get('/similars/missing_albums/?refresh=ad'))
-
-    assert 'Måneskin' in response.content.decode('utf-8')
+    assert get_review_artist(None).slug == 'seed-artist'
+    reviewed.refresh_from_db()
+    assert reviewed.disco_at < timezone.now()
 
 
 @patch('main.views.get_missing_songs', autospec=True, return_value={'album': None, 'songs': []})
@@ -1034,6 +1038,11 @@ def test_artist_albums_view_shows_lastfm_error(mock_albums, rf, seed_songs):
     response = similars_missing_albums_view(rf.get('/similars/missing_albums/'))
 
     assert 'Operation failed' in response.content.decode('utf-8')
+
+
+def test_straighten_quotes_plains_unicode_hyphens():
+    """Last.fm finds no album tracks under the unicode hyphen spelling of blink-182."""
+    assert straighten_quotes('blink\u2010182') == 'blink-182'
 
 
 # get_next_song: skipping unplayed songs while the history window is short

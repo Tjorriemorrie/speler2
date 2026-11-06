@@ -72,8 +72,9 @@ def track_slug(name: str) -> str:
 
 
 def straighten_quotes(text: str) -> str:
-    """Replace curly apostrophes, which last.fm does not match to straight ones."""
-    return text.replace('’', "'").replace('‘', "'")
+    """Replace curly apostrophes and unicode hyphens, which last.fm does not match to plain."""
+    text = text.replace('’', "'").replace('‘', "'")
+    return text.replace('\u2010', '-').replace('\u2011', '-')
 
 
 def _owned_artists(artist_slugs: set[str]) -> set[str]:

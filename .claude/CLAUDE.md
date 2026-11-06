@@ -171,6 +171,9 @@ without requiring the user to repeat the information later.
   last.fm playcount, without the owned ones (`get_stand_out_tracks`). A fixed share, not a
   cutoff: the mean let 6 through on albums with weak deep cuts, and mean + stdev leaves only the
   hit. The Wikipedia scraper (`scrape_studio_albums`) is kept but no longer wired to a view.
+- "More from artist" cycles strictly: the oldest `disco_at` is shown until the refresh button sends
+  that displayed artist (`?reviewed=<id>`, never "whoever is first") to the back with `disco_at = now`.
+  Reloading the page does not advance it. No per-album delay: every artist gets one turn per pass.
 - "Recommended album" (`similars.py`): last.fm has no similar-albums endpoint, so each seed
   artist stores its similar artists (one `artist.getSimilar` call, up to 50, one page) as
   `Similar` rows scored artist rating × match. Seeds are artists, not albums: albums by one

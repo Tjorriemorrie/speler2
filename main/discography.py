@@ -1,4 +1,3 @@
-import datetime
 import logging
 import math
 
@@ -32,15 +31,12 @@ def _next_review_artist() -> Artist:
     return Artist.objects.order_by(F('disco_at').asc(nulls_first=True), 'count_albums').first()
 
 
-def get_review_artist(refresh: bool) -> Artist:
-    """Get the artist to review, after marking the current one reviewed on refresh."""
-    artist = _next_review_artist()
-    if refresh:
-        artist.disco_at = timezone.now() + datetime.timedelta(days=30 * artist.count_albums)
-        artist.save(update_fields=['disco_at'])
-        logger.info(f'🎵 Marked artist reviewed: artist={artist.name}, until={artist.disco_at}')
-        artist = _next_review_artist()
-    return artist
+def get_review_artist(reviewed_id: str | None) -> Artist:
+    """Get the artist to review, after sending the reviewed one to the back of the queue."""
+    if reviewed_id:
+        Artist.objects.filter(id=reviewed_id).update(disco_at=timezone.now())
+        logger.info(f'🎵 Marked artist reviewed: artist_id={reviewed_id}')
+    return _next_review_artist()
 
 
 def get_track_playcounts(artist_name: str) -> dict[str, int]:

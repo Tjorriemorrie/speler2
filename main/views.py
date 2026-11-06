@@ -468,7 +468,7 @@ def similars_view(request):
 
 def similars_missing_albums_view(request):
     """Show a new album to get, else the best songs missing from owned albums, of the artist."""
-    artist = get_review_artist(refresh=request.GET.get('refresh') == 'ad')
+    artist = get_review_artist(request.GET.get('reviewed'))
     ctx = {'artist': artist}
 
     # only plain dicts are cached, the artist row is read fresh on every render
