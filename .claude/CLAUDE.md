@@ -156,8 +156,8 @@ without requiring the user to repeat the information later.
 
 ## Next rating
 
-- `get_match` picks from the plays of `get_recent_artists`: the ratings window, or the latest slot
-  count of plays if the window holds fewer, so starting to play after a break still has ratings.
+- `get_match` has no lookback limit: it walks the whole history, latest play first, for two songs
+  with no rating among the three, until the song has its `RATINGS_PER_PLAY` per play.
 
 ## Similars (last.fm)
 

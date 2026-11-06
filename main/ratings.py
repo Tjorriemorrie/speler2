@@ -1,12 +1,12 @@
 import logging
-from itertools import combinations
+from collections import defaultdict
 from typing import Iterable, List, Optional, Type
 
 from django.db import connection
 from django.db.models import Avg, Max, Q, Sum
 from django.utils import timezone
 
-from main.models import Album, Artist, Rating, Song
+from main.models import Album, Artist, History, Rating, Song
 
 logger = logging.getLogger(__name__)
 
@@ -45,17 +45,6 @@ def get_artist_rating(artist: Artist, album_mean: float) -> float:
     return filled_mean(ratings, ARTIST_FILL_ALBUMS, album_mean)
 
 
-def get_recent_songs_from_history() -> List[Song]:
-    """Get the songs of the plays in the ratings window, but never fewer than the slot count."""
-    from main.selectors import get_recent_artists  # noqa: PLC0415  circular import
-
-    songs = []
-    for h in get_recent_artists().prefetch_related('song'):
-        if h.song not in songs:
-            songs.append(h.song)
-    return songs
-
-
 def get_match(current_song: Song) -> Optional[List[Song]]:
     """Get next match."""
     rate_count_cut_off = current_song.count_played * RATINGS_PER_PLAY
@@ -66,40 +55,24 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
         )
         return
 
-    songs = get_recent_songs_from_history()
-    songs.insert(0, current_song)
-    song_ids = [s.id for s in songs]
-    # logger.info(f'Searching {song_ids} for a match...')
+    rated_with = defaultdict(set)
+    for winner_id, loser_id in Rating.objects.values_list('winner_id', 'loser_id'):
+        rated_with[winner_id].add(loser_id)
+        rated_with[loser_id].add(winner_id)
 
-    # Filter ratings for the relevant song pairs
-    ratings = Rating.objects.filter(
-        Q(winner_id__in=song_ids) | Q(loser_id__in=song_ids)
-    ).values_list('winner_id', 'loser_id')
+    # every played song, latest play first, so the most recent ones are matched first
+    played_ids = History.objects.exclude(song=current_song).values_list('song_id', flat=True)
+    song_ids = [i for i in dict.fromkeys(played_ids) if i not in rated_with[current_song.id]]
 
-    # Convert ratings to a set for faster lookup
-    rated_pairs = set()
-    for winner, loser in ratings:
-        rated_pairs.add((winner, loser))
-        rated_pairs.add((loser, winner))  # Add reverse pair for bidirectional check
-
-    # Find combinations of songs that have no ratings between them
-    songs_bag = []
-    for ix, song in enumerate(songs):
-        logger.debug(f'Get match: song bag {ix}: {song}')
-        songs_bag.append(song)
-        for b, c in combinations(songs_bag, 2):
-            # Ensure current_song is not one of b or c
-            if current_song in (b, c):
-                continue
-            # logger.info(f'Get match: checking {b} && {c}')
-            comb_ids = {current_song.id, b.id, c.id}
-            # Check if any pair in comb_ids has been rated
-            if not any((winner in comb_ids and loser in comb_ids) for winner, loser in rated_pairs):
-                match = [current_song, b, c]
+    for ix, c_id in enumerate(song_ids):
+        for b_id in song_ids[:ix]:
+            if c_id not in rated_with[b_id]:
+                found = Song.objects.in_bulk([b_id, c_id])
+                match = [current_song, found[b_id], found[c_id]]
                 logger.info(f'Get match: {match}')
                 return match
 
-    logger.warning(f'Could not find any match for {song_ids}')
+    logger.warning(f'Could not find any match for {current_song}: {len(song_ids)} unrated songs')
 
 
 def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:

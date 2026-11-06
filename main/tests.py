@@ -31,6 +31,7 @@ from main.models import Album, Artist, History, Rating, Similar, Song
 from main.musicfiles import recheck_metadata
 from main.plays import (
     MIN_HISTORY_FOR_NEW_SONGS,
+    NUM_SLOTS_IN_WINDOW,
     _slope_steps_remaining,
     get_next_song,
     get_previous_day_start,
@@ -273,13 +274,26 @@ def rated_songs(db):
 TWO_SONG_ALBUM_RATING = (1 + 0 + 8 / 3) / 10
 
 
-def test_match_falls_back_to_plays_older_than_the_window(rated_songs):
-    """Starting to play after a break still has the latest slot count of plays to rate against."""
+def test_match_reaches_all_the_way_back_through_history(rated_songs):
+    """A song played long before a full window of plays is still rated against."""
     winner, loser, unrated = rated_songs
-    for song in (loser, unrated):
-        History.objects.create(song=song, played_at=timezone.now() - timedelta(days=1))
+    History.objects.create(song=unrated, played_at=timezone.now() - timedelta(days=1000))
+    for _ in range(round(NUM_SLOTS_IN_WINDOW)):
+        History.objects.create(song=loser, played_at=timezone.now())
 
-    assert set(get_match(winner)) == {winner, loser, unrated}
+    assert get_match(winner) == [winner, loser, unrated]
+
+
+@pytest.mark.parametrize('rated', [(0, 1), (1, 2)], ids=['with-current', 'between-the-others'])
+def test_match_needs_all_three_songs_unrated_against_each_other(rated_songs, rated):
+    """A pair that already has a rating is never matched again."""
+    for song in rated_songs:
+        History.objects.create(song=song, played_at=timezone.now())
+    Rating.objects.create(
+        winner=rated_songs[rated[0]], loser=rated_songs[rated[1]], rated_at=timezone.now()
+    )
+
+    assert get_match(rated_songs[0]) is None
 
 
 def test_set_match_result_fills_album_and_artist_ratings(rated_songs):
