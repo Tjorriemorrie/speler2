@@ -69,7 +69,6 @@ def get_match(current_song: Song) -> Optional[List[Song]]:
             if c_id not in rated_with[b_id]:
                 found = Song.objects.in_bulk([b_id, c_id])
                 match = [current_song, found[b_id], found[c_id]]
-                logger.info(f'Get match: {match}')
                 return match
 
     logger.warning(f'Could not find any match for {current_song}: {len(song_ids)} unrated songs')
@@ -93,8 +92,7 @@ def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:
     winner = found[winner_id]
     songs = {winner}
     for loser in losers:
-        rating = Rating.objects.create(winner=winner, loser=loser, rated_at=timezone.now())
-        logger.info(f'🥊 Created rating: {rating}')
+        Rating.objects.create(winner=winner, loser=loser, rated_at=timezone.now())
         songs.add(loser)
 
     albums = set()
@@ -123,10 +121,10 @@ def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:
         artist.rating = get_artist_rating(artist, album_mean)
         artist.save()
 
+    skipped = f', skipped {missing_ids}' if missing_ids else ''
     logger.info(
-        f'🥊 Set match result: winner_id={winner_id}, losers={len(loser_ids)}, '
-        f'missing_ids={missing_ids}, albums={len(albums)}, artists={len(artists)}, '
-        f'song_mean={song_mean:.3f}, album_mean={album_mean:.3f}'
+        f'🥊 {winner.name} >>> {", ".join(loser.name for loser in losers)}{skipped} '
+        f'(song mean {song_mean:.3f}, album mean {album_mean:.3f})'
     )
     return missing_ids
 

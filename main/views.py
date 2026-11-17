@@ -171,10 +171,6 @@ def next_rating_view(request: WSGIRequest):
         # Set the HX-Trigger header to reload album view with ratings on it
         response['HX-Trigger'] = 'refreshAlbum'
 
-    logger.info(
-        f'🥊 Next rating: song_id={song_id}, match_count={len(match) if match else 0}, '
-        f'skipped={len(skipped)}'
-    )
     return response
 
 
