@@ -168,7 +168,7 @@ LOGGING = {
         },
         'compact': {
             '()': 'colorlog.ColoredFormatter',
-            'format': '%(log_color)s%(asctime)s %(levelname)-8s %(message)s',
+            'format': '%(log_color)s%(message)s',
         },
     },
     'handlers': {

@@ -92,29 +92,43 @@ def _owned_tracks(artist_slugs: set[str]) -> set[tuple[str, str]]:
     return owned
 
 
-def get_similar_artists(artist_name: str, limit: int) -> list[tuple[str, float]]:
-    """Get the artist's similar artists as (name, match), retrying network errors."""
-    lastfm_artist = get_network().get_artist(artist_name)
+def get_similar_tracks(artist_name: str, title: str, limit: int) -> list[dict]:
+    """Get the song's similar songs as artist, name, match and playcount, retrying network errors.
+
+    pylast's Track.get_similar drops the playcount, so the response is read here.
+    """
+    track = get_network().get_track(artist_name, title)
+    params = {**track._get_params(), 'limit': limit, 'autocorrect': 1}
     for attempt in range(1, SIMILARS_FETCH_ATTEMPTS + 1):
         try:
-            similar_artists = lastfm_artist.get_similar(limit=limit)
+            doc = track._request('track.getSimilar', True, params)
         except pylast.NetworkError as exc:
             if attempt == SIMILARS_FETCH_ATTEMPTS:
                 logger.warning(
                     f'⚠️ LastFM network error on the last attempt, giving up: '
-                    f'artist={artist_name}, attempts={attempt}'
+                    f'artist={artist_name}, title={title}, attempts={attempt}'
                 )
                 raise
             logger.warning(
-                f'⚠️ LastFM network error, retrying: artist={artist_name}, attempt={attempt}, '
-                f'error={exc}'
+                f'⚠️ LastFM network error, retrying: artist={artist_name}, title={title}, '
+                f'attempt={attempt}, error={exc}'
             )
             continue
+        similar_tracks = [
+            {
+                'name': pylast._extract(node, 'name'),
+                # the track's own name comes first, its artist's is the second
+                'artist': pylast._extract(node, 'name', 1),
+                'match': float(pylast._extract(node, 'match')),
+                'playcount': int(pylast._extract(node, 'playcount') or 0),
+            }
+            for node in doc.getElementsByTagName('track')
+        ]
         logger.info(
-            f'🎵 Fetched similar artists: artist={artist_name}, attempt={attempt}, '
-            f'count={len(similar_artists)}'
+            f'🎵 Fetched similar songs: artist={artist_name}, title={title}, attempt={attempt}, '
+            f'count={len(similar_tracks)}'
         )
-        return [(similar.item.name, similar.match) for similar in similar_artists]
+        return similar_tracks
 
 
 def get_artist_top_tracks(artist_name: str, limit: int) -> list[tuple[str, int]]:

@@ -179,29 +179,36 @@ without requiring the user to repeat the information later.
 - "More from artist" cycles strictly: the oldest `disco_at` is shown until the refresh button sends
   that displayed artist (`?reviewed=<id>`, never "whoever is first") to the back with `disco_at = now`.
   Reloading the page does not advance it. No per-album delay: every artist gets one turn per pass.
-- "Recommended album" (`similars.py`): last.fm has no similar-albums endpoint, so each seed
-  artist stores its similar artists (one `artist.getSimilar` call, up to 50, one page) as
-  `Similar` rows scored artist rating × match. Seeds are artists, not albums: albums by one
-  artist would repeat the same call. The artist with the highest summed score gives the
-  recommended album (its last.fm top album, with stand-out tracks as in "more from artist").
-  The summed score is only for ranking; it is not a percentage, so it is not shown. Listed
-  under it are the user's library artists that recommended it, with their match, best first, up
-  to `SIMILARS_ARTISTS_SHOWN` (5). Only the recommended artist's top album and tracks are looked
-  up, cached in `default` for 16 h.
+- "Recommended album" (`similars.py`) is for very popular hits, one-hit wonders especially, not
+  for finding similar artists: seeds are each artist's best `SIMILARS_SEED_SONGS` (3) songs, and
+  each stores all its similar songs (one `track.getSimilar` call; last.fm stops around 250 whatever
+  the limit) as `Similar` rows scored match × the seed artist's inverse percentile rank (best
+  artist 1, worst nearly 0). The song with the highest summed score and at least `HIT_MIN_PLAYS`
+  (1M) plays wins. Use a minimum, not a playcount multiplier: raw plays favour the famous songs of
+  famous bands, log plays change nothing. It is applied when ranking, so changing it needs no
+  refetch. pylast's `get_similar` drops the playcount, so `get_similar_tracks` reads the response.
+- The recommended album is the hit's album, or the artist's last.fm top album when the hit is on
+  none or on one under `MIN_ALBUM_TRACKS`; the hit is listed first, then its stand-out tracks as in
+  "more from artist", 3 in all. The summed score is only for ranking; it is not a percentage, so it
+  is not shown. Listed under it are the user's library artists that recommended it, with their
+  best match, up to `SIMILARS_ARTISTS_SHOWN` (5). Only the winning hit's album and tracks are
+  looked up, cached in `default` for 16 h.
 - Render first, fetch after: `snippet_similars_recommended.html` renders from the stored `Similar`
   rows, and only when `refreshed` is false carries an `hx-trigger="load"` element that re-requests
-  the view with `?refresh=1`, which fetches one seed artist. The refresh render must not carry the
+  the view with `?refresh=1`, which fetches one seed song. The refresh render must not carry the
   trigger again, or it loops. Reuse this for any other slow external call on page load.
-- Seeds are only the top `SIMILARS_SEED_SHARE` (10%) of artists by `SIMILARS_SEED_ORDERING`
-  (ends in `id` so places are stable for the `n/total` progress). Never fetched goes first, then
-  the oldest `similars_at` is redone, at most one per `SIMILARS_REFETCH_INTERVAL` (24 h, the
-  pool is only ~20 artists); a refetch deletes that seed's `Similar` rows first. An
-  artist that falls out of the seeds has its rows deleted and `similars_at` cleared on the next
-  update, so it stops recommending and is fetched first if it comes back. Progress shows
-  `(done/total)` during the first pass, then `(total done - redid #n)`.
-- `Artist.similars_at` marks a seed done even with zero results; the rows can't be the marker
-  because removing a recommendation deletes them. Last.fm "not found" (`WSError` status `'6'`, a
-  string) is final; any other `PyLastError` (5xx carry an int status) leaves the artist for retry.
+- A first pass over the ~600 seeds is too slow for page loads (~3 s per call): run
+  `manage.py fetchsimilars`, which fetches every unfetched seed, rides out failures and is safe to
+  rerun. After that, never fetched still goes first, then the oldest `similars_at` is redone, at
+  most one per `SIMILARS_REFETCH_INTERVAL` (1 h). The score keeps the artist's rank as of the fetch
+  until the refetch. A refetch deletes that seed's `Similar` rows first. A song that falls out of
+  the seeds has its rows deleted and `similars_at` cleared on the next update, so it stops
+  recommending and is fetched first if it comes back. Progress shows `(done/total)` during the
+  first pass, then `(total done - redid #n)`.
+- `Song.similars_at` marks a seed done even with zero results (about a quarter of songs have none);
+  the rows can't be the marker because removing a recommendation deletes them. Last.fm "not found"
+  (`WSError` status `'6'`, a string) is final; any other `PyLastError` (5xx carry an int status)
+  leaves the song for retry.
 - Recommendations are only of artists not in the library: owned artists are skipped on save and
   their rows deleted on render if the artist was added since. Owned artists are covered by "more
   from artist" instead.

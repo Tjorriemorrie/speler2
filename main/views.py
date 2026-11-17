@@ -39,7 +39,7 @@ from main.selectors import (
 from main.similars import (
     get_recommended_album,
     get_similars_progress,
-    update_next_similar_artist,
+    update_next_similar_song,
 )
 from main.tables import AlbumTable, ArtistTable, SongTable
 
@@ -172,7 +172,7 @@ def next_rating_view(request: WSGIRequest):
         response['HX-Trigger'] = 'refreshAlbum'
 
     logger.info(
-        f'⚖️ Next rating: song_id={song_id}, match_count={len(match) if match else 0}, '
+        f'🥊 Next rating: song_id={song_id}, match_count={len(match) if match else 0}, '
         f'skipped={len(skipped)}'
     )
     return response
@@ -493,14 +493,14 @@ def similars_missing_albums_view(request):
 
 
 def similars_recommended_view(request):
-    """Show the recommended album as stored, then (on refresh) after fetching the next artist's."""
+    """Show the recommended album as stored, then (on refresh) after fetching the next song's."""
     # the stored result renders straight away; its snippet then requests the refresh, so the
     # slow last.fm call never holds up the page
     refresh = bool(request.GET.get('refresh'))
     if refresh:
-        update_next_similar_artist()
-    # every fetch marks its seed artist, even with zero results, so this moves on each update
-    updated_at = Artist.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
+        update_next_similar_song()
+    # every fetch marks its seed song, even with zero results, so this moves on each update
+    updated_at = Song.objects.aggregate(updated_at=Max('similars_at'))['updated_at']
     ctx = {
         'refreshed': refresh,
         'updated_at': updated_at,

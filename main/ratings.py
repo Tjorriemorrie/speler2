@@ -94,7 +94,7 @@ def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:
     songs = {winner}
     for loser in losers:
         rating = Rating.objects.create(winner=winner, loser=loser, rated_at=timezone.now())
-        logger.info(f'⚖️ Created rating: {rating}')
+        logger.info(f'🥊 Created rating: {rating}')
         songs.add(loser)
 
     albums = set()
@@ -124,7 +124,7 @@ def set_match_result(winner_id: int, loser_ids: List[int]) -> List[int]:
         artist.save()
 
     logger.info(
-        f'⚖️ Set match result: winner_id={winner_id}, losers={len(loser_ids)}, '
+        f'🥊 Set match result: winner_id={winner_id}, losers={len(loser_ids)}, '
         f'missing_ids={missing_ids}, albums={len(albums)}, artists={len(artists)}, '
         f'song_mean={song_mean:.3f}, album_mean={album_mean:.3f}'
     )

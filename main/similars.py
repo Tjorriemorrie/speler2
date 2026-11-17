@@ -1,54 +1,80 @@
 import logging
-import math
 from datetime import timedelta
 
 import pylast
 from django.conf import settings
 from django.core.cache import cache
 from django.db import transaction
-from django.db.models import Count, F, Max, Sum
+from django.db.models import Count, F, Max, Sum, Window
+from django.db.models.functions import RowNumber
 from django.utils import timezone
 
-from main.discography import get_stand_out_tracks, get_track_playcounts
+from main.discography import MIN_ALBUM_TRACKS, get_stand_out_tracks, get_track_playcounts
 from main.lastfm_service import (
     _owned_artists,
     artist_slug,
     get_album_tracks,
     get_artist_top_albums,
-    get_similar_artists,
+    get_similar_tracks,
+    get_track_album,
     straighten_quotes,
+    track_slug,
 )
-from main.models import Artist, Similar
+from main.models import Artist, Similar, Song
 
 logger = logging.getLogger(__name__)
 
-# as many as last.fm gives in one page
-SIMILARS_FETCH_LIMIT = 50
-# order in which artists are fetched as seeds
-# id breaks ties, so an artist keeps its place in the progress count between renders
-SIMILARS_SEED_ORDERING = ('-rating', '-count_played', 'id')
-# only the top decile of artists are seeds; once all are fetched they are refetched oldest first
-SIMILARS_SEED_SHARE = 0.1
+# as many as last.fm gives: it stops around 250, whatever the limit
+SIMILARS_FETCH_LIMIT = 250
+# each artist's best songs are the seeds
+SIMILARS_SEED_SONGS = 3
+# an artist's place in this order sets the weight of its seeds
+SIMILARS_ARTIST_ORDERING = ('-rating', '-count_played', 'id')
+# best artist first, each artist's best song first; id breaks ties, so a song keeps its place in
+# the progress count between renders
+SIMILARS_SEED_ORDERING = (
+    '-artist__rating',
+    '-artist__count_played',
+    'artist_id',
+    '-rating',
+    '-count_played',
+    'id',
+)
 # once every seed is fetched, at most one is redone per this interval
-SIMILARS_REFETCH_INTERVAL = timedelta(hours=24)
+SIMILARS_REFETCH_INTERVAL = timedelta(hours=1)
+# what makes a song a hit; applied when ranking, so changing it needs no refetch
+HIT_MIN_PLAYS = 1_000_000
 # library artists listed under the recommended album as the artists it is similar to
 SIMILARS_ARTISTS_SHOWN = 5
+# the hit and the album's stand-out tracks after it
+SIMILARS_TRACKS_SHOWN = 3
 SIMILARS_CACHE_TIMEOUT = 3600 * 16
 
 
 def _get_seed_ids() -> list[int]:
-    """Ids of the seed artists: the top decile of the library, best first."""
-    limit = math.ceil(Artist.objects.count() * SIMILARS_SEED_SHARE)
+    """Ids of the seed songs: every artist's best songs, best artist first."""
     return list(
-        Artist.objects.order_by(*SIMILARS_SEED_ORDERING).values_list('id', flat=True)[:limit]
+        Song.objects.annotate(
+            place=Window(
+                RowNumber(), partition_by='artist_id', order_by=('-rating', '-count_played', 'id')
+            )
+        )
+        .filter(place__lte=SIMILARS_SEED_SONGS)
+        .order_by(*SIMILARS_SEED_ORDERING)
+        .values_list('id', flat=True)
     )
+
+
+def has_unfetched_seeds() -> bool:
+    """Whether any seed song has not been fetched yet."""
+    return Song.objects.filter(id__in=_get_seed_ids(), similars_at__isnull=True).exists()
 
 
 def get_similars_progress() -> dict | None:
     """How many seeds are fetched out of how many, and the place of the latest fetched one."""
     seed_ids = _get_seed_ids()
     fetched_ids = list(
-        Artist.objects.filter(id__in=seed_ids, similars_at__isnull=False)
+        Song.objects.filter(id__in=seed_ids, similars_at__isnull=False)
         .order_by('-similars_at')
         .values_list('id', flat=True)
     )
@@ -61,115 +87,161 @@ def get_similars_progress() -> dict | None:
     }
 
 
-def update_next_similar_artist():
-    """Store the similar artists not owned yet of the seed artist fetched longest ago."""
+def _get_artist_weight(artist_id: int) -> float:
+    """The artist's inverse percentile rank: the best artist is 1, the worst nearly 0."""
+    artist_ids = list(
+        Artist.objects.order_by(*SIMILARS_ARTIST_ORDERING).values_list('id', flat=True)
+    )
+    return 1 - artist_ids.index(artist_id) / len(artist_ids)
+
+
+def update_next_similar_song() -> bool:
+    """Store the similar songs by new artists of the seed fetched longest ago.
+
+    Returns whether a seed was marked done, so a batch can tell an outage from progress.
+    """
     if not settings.LASTFM_ENABLE:
-        logger.info('🎵 LastFM disabled, not updating similar artists')
-        return
+        logger.info('🎵 LastFM disabled, not updating similar songs')
+        return False
 
     seed_ids = _get_seed_ids()
-    # an artist fallen out of the seeds no longer recommends; it is fetched anew if it comes back
-    count_dropped, _ = Similar.objects.exclude(artist_id__in=seed_ids).delete()
-    Artist.objects.exclude(id__in=seed_ids).filter(similars_at__isnull=False).update(
+    # a song fallen out of the seeds no longer recommends; it is fetched anew if it comes back
+    count_dropped, _ = Similar.objects.exclude(song_id__in=seed_ids).delete()
+    Song.objects.exclude(id__in=seed_ids).filter(similars_at__isnull=False).update(
         similars_at=None
     )
     if count_dropped:
-        logger.info(f'🎵 Dropped similar artists of former seeds: deleted={count_dropped}')
+        logger.info(f'🎵 Dropped similar songs of former seeds: deleted={count_dropped}')
 
-    seeds = Artist.objects.filter(id__in=seed_ids)
+    seeds = Song.objects.filter(id__in=seed_ids)
     if not seeds.filter(similars_at__isnull=True).exists():
         refetched_at = seeds.aggregate(latest=Max('similars_at'))['latest']
         if refetched_at and timezone.now() - refetched_at < SIMILARS_REFETCH_INTERVAL:
             logger.info(f'🎵 Every seed fetched, last refetch too recent: at={refetched_at}')
-            return
+            return False
 
     # never fetched comes first, best seed first; after that the oldest fetch is redone
     seed = (
-        seeds.order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
+        seeds.select_related('artist')
+        .order_by(F('similars_at').asc(nulls_first=True), *SIMILARS_SEED_ORDERING)
         .first()
     )
     if not seed:
-        logger.info('🎵 No artists in the library, nothing to update')
-        return
+        logger.info('🎵 No songs in the library, nothing to update')
+        return False
 
-    seed_name = straighten_quotes(seed.name)
-    logger.info(f'🎵 Fetching similar artists: artist_id={seed.id}, artist={seed_name}')
+    seed_artist = straighten_quotes(seed.artist.name)
+    seed_title = straighten_quotes(seed.name)
+    logger.info(
+        f'🎵 Fetching similar songs: song_id={seed.id}, artist={seed_artist}, title={seed_title}'
+    )
     try:
-        similar_artists = get_similar_artists(seed_name, SIMILARS_FETCH_LIMIT)
+        similar_tracks = get_similar_tracks(seed_artist, seed_title, SIMILARS_FETCH_LIMIT)
     except pylast.PyLastError as exc:
-        # unknown artist is final, so it must not block the artists after it; the rest is retried
+        # unknown song is final, so it must not block the songs after it; the rest is retried
         if not (
             isinstance(exc, pylast.WSError) and exc.status == str(pylast.STATUS_INVALID_PARAMS)
         ):
             logger.warning(
-                f'⚠️ Fetching similar artists from LastFM failed, retrying next update: '
-                f'artist_id={seed.id}, artist={seed_name}, error={exc}'
+                f'⚠️ Fetching similar songs from LastFM failed, retrying next update: '
+                f'song_id={seed.id}, artist={seed_artist}, title={seed_title}, error={exc}'
             )
-            return
+            return False
         logger.warning(
-            f'⚠️ Artist not found on LastFM, marking it done: artist_id={seed.id}, '
-            f'artist={seed_name}'
+            f'⚠️ Song not found on LastFM, marking it done: song_id={seed.id}, '
+            f'artist={seed_artist}, title={seed_title}'
         )
-        similar_artists = []
+        similar_tracks = []
 
     # only artists not in the library are recommended, owned ones get "more from artist"
-    owned_artists = _owned_artists({artist_slug(name) for name, _ in similar_artists})
+    owned_artists = _owned_artists({artist_slug(track['artist']) for track in similar_tracks})
+    weight = _get_artist_weight(seed.artist_id)
     seen = set()
     count_skipped = 0
     now = timezone.now()
     similars = []
-    for name, match in similar_artists:
-        slug = artist_slug(name)
-        # an empty slug cannot be put in the remove url
-        if not slug or slug in owned_artists or slug in seen:
+    for track in similar_tracks:
+        key = (artist_slug(track['artist']), track_slug(track['name']))
+        # an empty artist slug cannot be put in the remove url, an empty track slug cannot match
+        if not all(key) or key[0] in owned_artists or key in seen:
             count_skipped += 1
             continue
-        seen.add(slug)
+        seen.add(key)
         similars.append(
             Similar(
-                artist=seed,
-                artist_name=name,
-                artist_slug=slug,
-                match=match,
-                rating=seed.rating,
-                score=seed.rating * match,
+                song=seed,
+                artist_name=track['artist'],
+                artist_slug=key[0],
+                track_name=track['name'],
+                track_slug=key[1],
+                match=track['match'],
+                playcount=track['playcount'],
+                score=weight * track['match'],
                 scraped_at=now,
             )
         )
 
-    # a refetch replaces the seed's previous artists rather than adding to them
+    # a refetch replaces the seed's previous songs rather than adding to them
     with transaction.atomic():
-        count_replaced, _ = Similar.objects.filter(artist=seed).delete()
+        count_replaced, _ = Similar.objects.filter(song=seed).delete()
         Similar.objects.bulk_create(similars)
         seed.similars_at = now
         seed.save(update_fields=['similars_at'])
     logger.info(
-        f'🎵 Similar artists updated: artist_id={seed.id}, artist={seed_name}, '
-        f'fetched={len(similar_artists)}, skipped={count_skipped}, saved={len(similars)}, '
+        f'🎵 Similar songs updated: song_id={seed.id}, artist={seed_artist}, title={seed_title}, '
+        f'fetched={len(similar_tracks)}, skipped={count_skipped}, saved={len(similars)}, '
         f'replaced={count_replaced}'
     )
+    return True
 
 
-def _get_top_album(artist_name: str, slug: str) -> tuple[str, int, str] | None:
-    """Get the artist's most played album from last.fm, cached."""
-    cache_key = f'similars_top_album_{slug}'
-    if (top_albums := cache.get(cache_key)) is None:
-        top_albums = get_artist_top_albums(straighten_quotes(artist_name), 1)
-        cache.set(cache_key, top_albums, timeout=SIMILARS_CACHE_TIMEOUT)
-    return top_albums[0] if top_albums else None
+def _fetch_hit_album(best: dict) -> dict:
+    """Get the hit's album with its stand-out tracks, the hit first; empty when there is none."""
+    name = straighten_quotes(best['artist_name'])
+    album = get_track_album(name, best['track_name'])
+    track_names = get_album_tracks(name, album[0]) if album else []
+    # last.fm often files a hit under its single, so the artist's top album stands in
+    if len(track_names) < MIN_ALBUM_TRACKS:
+        top_albums = get_artist_top_albums(name, 1)
+        if not top_albums:
+            return {}
+        album = (top_albums[0][0], top_albums[0][2])
+        track_names = get_album_tracks(name, album[0])
+    hit = {'name': best['track_name'], 'playcount': best['playcount']}
+    others = get_stand_out_tracks(
+        name, album[0], track_names, get_track_playcounts(name), {best['track_slug']}
+    )
+    return {
+        'name': album[0],
+        'url': album[1],
+        'tracks': [hit, *others][:SIMILARS_TRACKS_SHOWN],
+    }
+
+
+def _get_hit_album(best: dict) -> dict:
+    """Get the hit's album, cached."""
+    cache_key = f'similars_hit_album_{best["artist_slug"]}_{best["track_slug"]}'
+    if (album := cache.get(cache_key)) is None:
+        album = _fetch_hit_album(best)
+        cache.set(cache_key, album, timeout=SIMILARS_CACHE_TIMEOUT)
+    return album
 
 
 def get_recommended_album() -> dict | None:
-    """Get the top album of the artist most similar across the library.
+    """Get the album of the hit most similar across the library.
 
-    It carries its stand-out tracks and the library artists it is most similar to.
+    It carries the hit, the album's stand-out tracks and the library artists the hit is most
+    similar to.
     """
     ranked = (
-        Similar.objects.values('artist_slug')
+        Similar.objects.filter(playcount__gte=HIT_MIN_PLAYS)
+        .values('artist_slug', 'track_slug')
         .annotate(
             total_score=Sum('score'),
-            count_artists=Count('id'),
+            count_seeds=Count('id'),
             artist_name=Max('artist_name'),
+            track_name=Max('track_name'),
+            playcount=Max('playcount'),
         )
         .order_by('-total_score')
     )
@@ -182,35 +254,30 @@ def get_recommended_album() -> dict | None:
                 f'artist={best["artist_name"]}, deleted={deleted}'
             )
             continue
-        top_album = _get_top_album(best['artist_name'], best['artist_slug'])
-        if top_album:
+        album = _get_hit_album(best)
+        if album:
             break
-        logger.info(f'🎵 Skipped artist without albums: artist={best["artist_name"]}')
+        logger.info(
+            f'🎵 Skipped hit without album: artist={best["artist_name"]}, '
+            f'track={best["track_name"]}'
+        )
     else:
         logger.info('🎵 No recommended album yet')
         return None
 
-    best['name'], _, best['url'] = top_album
-    cache_key = f'similars_album_tracks_{best["artist_slug"]}'
-    if (tracks := cache.get(cache_key)) is None:
-        name = straighten_quotes(best['artist_name'])
-        tracks = get_stand_out_tracks(
-            name,
-            best['name'],
-            get_album_tracks(name, best['name']),
-            get_track_playcounts(name),
-            set(),
-        )
-        cache.set(cache_key, tracks, timeout=SIMILARS_CACHE_TIMEOUT)
-    best['tracks'] = tracks
+    best.update(album)
     best['artists'] = list(
-        Artist.objects.filter(similars__artist_slug=best['artist_slug'])
-        # reuses the filter's join, so each artist gets the match of its own row
-        .annotate(match=F('similars__match'))
+        Artist.objects.filter(
+            songs__similars__artist_slug=best['artist_slug'],
+            songs__similars__track_slug=best['track_slug'],
+        )
+        # reuses the filter's join; an artist can recommend the hit through several seeds
+        .annotate(match=Max('songs__similars__match'))
         .order_by('-match')[:SIMILARS_ARTISTS_SHOWN]
     )
     logger.info(
-        f'🎵 Recommended album: artist={best["artist_name"]}, album={best["name"]}, '
-        f'total_score={best["total_score"]:.3f}, count_artists={best["count_artists"]}'
+        f'🎵 Recommended album: artist={best["artist_name"]}, track={best["track_name"]}, '
+        f'album={best["name"]}, playcount={best["playcount"]}, '
+        f'total_score={best["total_score"]:.3f}, count_seeds={best["count_seeds"]}'
     )
     return best
