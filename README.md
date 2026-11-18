@@ -4,14 +4,12 @@ music library player
 
 <img src="scrn1.png" width="800">
 
-
 ## Why?
 
 Because streaming services sucks. You should own what you pay for. Paying for a service is a waste
 of money, like insurance.
 
 This is an album-based player, where the UI is optimized for browsing full albums.
-
 
 ## Features
 Nice app-like interface using HTMX.
@@ -37,20 +35,16 @@ it tries to avoid repeating the same artist within an hour. You can see in the l
 a little time to pass before repeating the same artist (showing how many is still in the queue).
 
 A song's rating is its win ratio in those matches. A match song removed from the library before
-you click is skipped (and named in the rating box); the others are still rated. Albums and artists use a bayesian average so one
-great single can't top the list: an album averages its songs, filled up to 10 with the library's
-mean song rating; an artist averages its albums, filled up to 3 with the mean album rating.
+you click is skipped (and named in the rating box); the others are still rated. Albums and artists
+use a bayesian average so one great single can't top the list: an album averages its songs, filled
+up to 10 with the library's mean song rating; an artist averages its albums, filled up to 3 with the
+mean album rating.
 
 <img src="scrn4.png" width="600">
 
-
 #### Last.fm scrobbler integration
 
-Optionally, you can set the last.fm values in the .env file, and it will scrobble the songs you play
-```ini
-LASTFM_API_KEY=
-LASTFM_SECRET=
-```
+Optionally, set `LASTFM_API_KEY` and `LASTFM_SECRET` in `.env` and it will scrobble the songs you play.
 
 If you use that, the Similars page also recommends a song you don't own yet:
 
@@ -59,10 +53,9 @@ If you use that, the Similars page also recommends a song you don't own yet:
 Each visit shows the stored pick, then asks last.fm `track.getSimilar` (top 50) about one more song
 and keeps its best 10 tracks you don't own. Only the top 10% of songs (most played, then rating,
 then artist rating) are asked; once all of them are done, the one asked longest ago is redone,
-replacing its tracks. Score
-sums `rating × match` over the songs recommending it (top 10 by match listed), so can pass 100%.
-"Last updated" at the bottom is the latest fetch (newest `Song.similars_at`), with that song's
-place in the top 10% in brackets, e.g. `(156/987)`.
+replacing its tracks. Score sums `rating × match` over the songs recommending it (top 10 by match
+listed), so can pass 100%. "Last updated" at the bottom is the latest fetch (newest
+`Song.similars_at`), with that song's place in the top 10% in brackets, e.g. `(156/987)`.
 Last.fm matches titles literally (curly `’` fails where `'` works); unknown tracks are `WSError` `'6'`.
 pylast fixes its timeout (5s connect, 10s read), so this fetch retries network errors 3×; scrobbles don't.
 
@@ -73,7 +66,6 @@ rated albums as removal candidates (8, one ratings window of slots). An album is
 any song on it has fewer than 2 plays or 10 ratings (not had a fair chance yet; 5 ratings per play).
 Those songs get +1 play priority, so the list clears quickly; it is re-read every 30 minutes.
 
-
 ## How to use
 
 Just clone the repo and do normal django setup steps. You can use uv to set it up quickly:
@@ -82,15 +74,8 @@ Just clone the repo and do normal django setup steps. You can use uv to set it u
 uv sync
 ```
 
-Copy your .env from .env.dist and set your values, e.g.
-```ini
-MUSIC_DIR=C:\Users\jacoj\Dropbox\Jaco\Music
-```
-
-Then just run it to scan for music file changes:
-```bash
-python manage.py parsemusic
-```
+Copy your .env from .env.dist and set your values, e.g. `MUSIC_DIR=C:\Users\jacoj\Dropbox\Jaco\Music`.
+Then scan for music file changes: `python manage.py parsemusic`.
 
 Songs, albums and artists store their stats (counts, plays, ratings). Deleting a rating, play, song
 or album, or `parsemusic recheck` moving a song, marks the rows it leaves behind dirty: recalculate
@@ -103,3 +88,10 @@ that cds into the repo, activates `.venv` and runs exactly that).
 
 Django with HTMX. Previous version used React, but that is obsolete thanks to HTMX.
 Contribute: do whatever you want.
+
+Plain fetches (Billboard charts, the currently unwired Wikipedia discography scraper) use `httpx2`,
+which unlike `requests` only follows redirects when passed `follow_redirects=True`;
+`Artist.wiki_link` is a Wikipedia search url that redirects to the article, so that flag is
+load-bearing. Wikipedia 403s httpx2 unless the User-Agent names the bot and a contact
+([robot policy](https://w.wiki/4wJS)); a browser User-Agent only got through on urllib3's TLS
+fingerprint. AZLyrics needs `curl_cffi` browser impersonation instead.

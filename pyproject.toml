@@ -19,7 +19,7 @@ dependencies = [
     "huggingface-hub",
     "mutagen",
     "Pillow",
-    "requests",
+    "httpx2",
     "plotly",
     "pylast",
     "retry",

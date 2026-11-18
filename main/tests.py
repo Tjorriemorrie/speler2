@@ -5,9 +5,11 @@ from types import SimpleNamespace
 from unittest.mock import MagicMock, patch
 from xml.dom import minidom
 
+import httpx2
 import pylast
 import pytest
 from bs4 import BeautifulSoup
+from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from django.core.cache import cache, caches
 from django.core.management import call_command
 from django.db import OperationalError
@@ -25,10 +27,12 @@ from main.lastfm_service import (
     get_artist_top_tracks,
     get_similar_tracks,
     get_track_album,
+    scrape_studio_albums,
     scrobble,
     straighten_quotes,
     track_slug,
 )
+from main.lyrics import BrowserCheckError, scrape_billboards
 from main.management.commands.fetchsimilars import MAX_FAILURES_IN_A_ROW
 from main.models import Album, Artist, History, Rating, Similar, Song
 from main.musicfiles import recheck_metadata
@@ -57,6 +61,7 @@ from main.similars import (
 )
 from main.templatetags.fmt import days_ago
 from main.views import (
+    lyrics_view,
     similars_bad_albums,
     similars_bad_artists,
     similars_missing_albums_view,
@@ -1251,9 +1256,9 @@ def test_falls_back_to_a_played_song_when_every_artist_is_queued(mock_sa, catalo
 @patch('main.plays.NUM_SLOTS_IN_WINDOW', MIN_HISTORY_FOR_NEW_SONGS)
 def test_skips_new_songs_when_history_is_only_outside_the_window(catalog):
     """Older plays filling the recent history do not count towards the window."""
-    for days_ago in range(1, MIN_HISTORY_FOR_NEW_SONGS + 1):
+    for days in range(1, MIN_HISTORY_FOR_NEW_SONGS + 1):
         History.objects.create(
-            song=catalog['history'], played_at=timezone.now() - timedelta(days=days_ago)
+            song=catalog['history'], played_at=timezone.now() - timedelta(days=days)
         )
 
     assert get_next_song() == catalog['played']
@@ -1824,3 +1829,81 @@ def test_days_ago_shows_month_and_year_after_360_days(days, shown):
     value = timezone.localtime() - timedelta(days=days)
 
     assert days_ago(value).endswith(f'({shown.format(value)})')
+
+
+# plain http fetches: httpx2 has to be told to follow redirects, as requests did by itself
+
+WIKI_DISCOGRAPHY = (
+    '<div class="mw-heading mw-heading2"><h2 id="Discography">Discography</h2></div>'
+    '<ul><li><i><a href="/wiki/Alpha">alpha</a></i> (2001)</li></ul>'
+)
+
+
+def _http_response(status: int, url: str, text: str = '') -> httpx2.Response:
+    """A response tied to its request, so raise_for_status works on it."""
+    return httpx2.Response(status, text=text, request=httpx2.Request('GET', url))
+
+
+@patch('main.lyrics.httpx2.get', autospec=True)
+def test_scrape_billboards_raises_http_error(mock_get, db):
+    """A failed chart fetch raises, and the fetch follows redirects."""
+    mock_get.side_effect = lambda url, **kwargs: _http_response(503, url)
+
+    with pytest.raises(httpx2.HTTPStatusError):
+        scrape_billboards()
+
+    assert mock_get.call_args.kwargs['follow_redirects']
+
+
+@patch('main.lastfm_service.httpx2.get', autospec=True)
+def test_scrape_studio_albums_marks_owned_albums(mock_get, db):
+    """The albums are read off the fetched wiki page, flagging the ones already owned."""
+    _make_song('alpha', rating=0.5)
+    mock_get.side_effect = lambda url, **kwargs: _http_response(200, url, WIKI_DISCOGRAPHY)
+
+    wiki_details = scrape_studio_albums()
+
+    href = 'https://en.wikipedia.org/wiki/Alpha'
+    assert wiki_details['albums'] == [{'name': 'alpha', 'year': '2001', 'href': href, 'own': True}]
+    assert mock_get.call_args.kwargs['follow_redirects']
+
+
+@patch('main.lastfm_service.httpx2.get', autospec=True)
+def test_scrape_studio_albums_raises_without_discography(mock_get, db):
+    """No wiki page suffix with a discography heading gives up with the url."""
+    _make_song('alpha', rating=0.5)
+    mock_get.side_effect = lambda url, **kwargs: _http_response(200, url, '<html></html>')
+
+    with pytest.raises(ValueError, match='Could not find artist home wiki page'):
+        scrape_studio_albums()
+
+
+# lyrics_view
+
+
+@patch('main.views.search_azlyrics', autospec=True, return_value='la la la')
+def test_lyrics_view_renders_lyrics(mock_search, rf, db):
+    """Fetched lyrics are rendered."""
+    song = _make_song('alpha', rating=0.5)
+
+    response = lyrics_view(rf.get('/'), song.id)
+
+    assert 'la la la' in response.content.decode()
+
+
+@pytest.mark.parametrize(
+    ('error', 'shown'),
+    [
+        (BrowserCheckError('https://www.azlyrics.com/lyrics/a/b.html'), 'Browser check required'),
+        (CurlRequestException('Failed to connect'), 'Failed to connect'),
+    ],
+)
+@patch('main.views.search_azlyrics', autospec=True)
+def test_lyrics_view_renders_retry_form_on_error(mock_search, rf, db, error, shown):
+    """A blocked or failed fetch shows the error above the retry form."""
+    song = _make_song('alpha', rating=0.5)
+    mock_search.side_effect = error
+
+    response = lyrics_view(rf.get('/'), song.id)
+
+    assert shown in response.content.decode()

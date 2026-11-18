@@ -1,7 +1,6 @@
 import logging
 import re
 
-import requests
 from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from django.conf import settings
 from django.core.cache import cache
@@ -362,8 +361,9 @@ def lyrics_view(request, song_id: int):
         ctx['error'] = str(exc)
         ctx['form'] = URLForm(song_id=song.id, initial={'url': exc.url})
         ctx['lookup_url'] = exc.url
+        logger.warning(f'🎤 Lyrics blocked by browser check: song_id={song.id}, url={exc.url}')
         return render(request, 'main/partial_lyrics.html', ctx)
-    except (requests.RequestException, CurlRequestException, ValueError) as exc:
+    except (CurlRequestException, ValueError) as exc:
         # Render the form with the exception message pre-filled in the input
         ctx['error'] = str(exc)
         form = URLForm(song_id=song.id)
@@ -377,11 +377,16 @@ def lyrics_view(request, song_id: int):
             ctx['lookup_url'] = lookup_url
         except AttributeError:
             ctx['lookup_url'] = 'https://www.azlyrics.com'
+        logger.warning(
+            f'🎤 Lyrics fetch failed: song_id={song.id}, refresh={refresh}, '
+            f'instrument={instrument}, url={url}, error={exc}'
+        )
         return render(request, 'main/partial_lyrics.html', ctx)
 
     ctx['lyrics'] = lyrics
     response = render(request, 'main/partial_lyrics.html', ctx)
     patch_cache_control(response, public=True, max_age=86400)
+    logger.info(f'🎤 Rendered lyrics: song_id={song.id}, chars={len(lyrics)}')
     return response
 
 

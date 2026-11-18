@@ -68,6 +68,16 @@ without requiring the user to repeat the information later.
   carries the blocked url; the lyrics view links straight to it and pre-fills the
   retry form so the user solves it by hand in their own browser and hits Retry.
 
+## HTTP clients
+
+- Plain fetches use **`httpx2`** (Pydantic's httpx fork), not `requests` or `httpx`. Both of those
+  stay installed only as transitive deps (huggingface-hub, pylast); don't import them.
+- httpx2 does not follow redirects by default: pass `follow_redirects=True` on every call that
+  `requests` would have redirected. `Artist.wiki_link` is a search url that relies on it.
+- Wikimedia 403s httpx2 whatever the headers unless the User-Agent names the bot and a contact
+  (`Speler/2.0 (<repo url>) httpx2/<version>`). Never go back to a spoofed browser agent; it only
+  passed on urllib3's TLS fingerprint. `curl_cffi` stays the client for AZLyrics only.
+
 ## htmx
 
 - Vendored at `main/static/main/htmx-4.0.0/htmx.min.js`, loaded from `base.html`. **htmx 4**,

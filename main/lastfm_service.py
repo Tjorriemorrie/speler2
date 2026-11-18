@@ -6,8 +6,8 @@ import unicodedata
 from typing import List
 
 import bs4
+import httpx2
 import pylast
-import requests
 from bs4 import BeautifulSoup
 from django.conf import settings
 from django.db.models import F
@@ -234,14 +234,16 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
     wiki_details = {'artist': artist, 'albums': []}
     logger.info(f'Fetching {artist.name} studio albums from {artist.wiki_link}')
 
+    # Wikimedia 403s httpx2 unless the agent names the bot and a contact (https://w.wiki/4wJS);
+    # a browser agent only passed on urllib3's TLS fingerprint
     headers = {
-        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-        '(KHTML, like Gecko) Chrome/115.0.0.0 Safari/537.36'
+        'User-Agent': 'Speler/2.0 (https://github.com/Tjorriemorrie/speler2) '
+        f'httpx2/{httpx2.__version__}'
     }
     url = artist.wiki_link
     for suffix in ['', ' (band)', ' (musician)']:
         url_used = url + suffix
-        response = requests.get(url_used, headers=headers, timeout=10)
+        response = httpx2.get(url_used, headers=headers, timeout=10, follow_redirects=True)
         response.raise_for_status()
         soup = BeautifulSoup(response.content, 'html.parser')
 
@@ -253,6 +255,10 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
         if disc_heading:
             break
     else:
+        logger.warning(
+            f'📀 No discography heading on any wiki page: artist={artist.name}, url={url}, '
+            f'id_heading={id_heading}'
+        )
         raise ValueError(f'Could not find artist home wiki page: {url}')
 
     hatnote_tag = find_hatnote_tag(disc_heading)
@@ -285,6 +291,11 @@ def scrape_studio_albums(refresh: bool = False) -> dict:  # noqa: PLR0915, PLR09
         name_clean = clean_name(album_info['name'])
         album_info['own'] = name_clean in album_names
 
+    owned_count = sum(album_info['own'] for album_info in wiki_details['albums'])
+    logger.info(
+        f'📀 Scraped studio albums: artist={artist.name}, url={url_used}, '
+        f'albums_count={len(wiki_details["albums"])}, owned={owned_count}'
+    )
     return wiki_details
 
 
