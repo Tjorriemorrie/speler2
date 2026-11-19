@@ -10,9 +10,8 @@
                hx-target="#main-container"
                hx-swap="innerHTML"
                hx-trigger="click">
-            <img class="img-fluid img-thumbnail" src="{% url 'album_art' song.id %}"
-                 style="max-height: 13em;"
-                 alt="{{ song.album.name }} album art"/>
+            <img class="img-thumbnail player-art" src="{% url 'album_art' song.id %}"
+                 title="{{ song.album.name }}" alt=""/>
             </a>
         </p>
     </div>

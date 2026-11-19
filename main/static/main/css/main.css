@@ -343,6 +343,18 @@ tr:hover .title-edit,
 }
 
 
+/************************** PLAYER ***********************************/
+
+/* a fixed square whatever the art's shape (or none: the empty alt leaves a blank square), so
+    the header row - and the rating cards that fill it - always get the same height */
+.player-art {
+    width: 13em;
+    height: 13em;
+    max-width: 100%;
+    object-fit: contain;
+}
+
+
 /************************** ARTIST VIEW  ***********************************/
 
 .artist-view .card-img-top {
