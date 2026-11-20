@@ -10,6 +10,7 @@ from django.http import Http404, HttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import get_conditional_response, patch_cache_control
 from django.utils.http import http_date
+from django.views.decorators.cache import never_cache
 from django_filters.views import FilterMixin
 from django_tables2 import SingleTableView
 from mutagen import MutagenError
@@ -51,6 +52,9 @@ def home_view(request: WSGIRequest):
     return render(request, 'main/home.html', ctx)
 
 
+# the player's partials depend on the session's current song, so the browser must never reuse
+# one: restoring a closed browser replayed the morning's cached `/next-song/?refresh=1`
+@never_cache
 def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     """Return next song."""
     last_song_id = request.session.get('song_id')
@@ -133,6 +137,7 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
     return response
 
 
+@never_cache
 def next_rating_view(request: WSGIRequest):
     """Return next rating."""
     winner_id = request.GET.get('winner_id')
@@ -211,6 +216,7 @@ def album_art_view(request, song_id):
     return response
 
 
+@never_cache
 def album_view(request, album_id):
     """Album view of song."""
     current_song_id = request.session.get('song_id')

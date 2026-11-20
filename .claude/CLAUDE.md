@@ -99,6 +99,16 @@ without requiring the user to repeat the information later.
   heuristic — it flags a parent whenever any descendant has `hx-get`, without checking whether that
   descendant declares its own attribute, so verify before adding `:inherited`.
 
+- Views whose response depends on the session's current song (`next_song`, `next_rating`,
+  `album` for id 0) are `@never_cache`. When a closed browser is reopened it restores the home page
+  from cache, and without `no-store` it also replayed a stored `/next-song/?refresh=1` (the
+  morning's first song) without asking the server. The home page itself stays cacheable, so a
+  restore with the server down still shows the page and its offline screen.
+- An `htmx:error` with no response (server unreachable) swaps the page for the `#offline` message
+  in `home.html`. Retry fetches `/` and reloads only once that answers.
+- `player.js` sets the `django_timezone` cookie at script top, not on ready: its `beforeunload`
+  clears cookies, and the player's load request fires before jQuery's ready.
+
 ## UI fonts
 
 - Names get the display fonts from `main.css`, as the player header (`partial_song_player.html`)

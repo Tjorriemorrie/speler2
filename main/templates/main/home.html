@@ -36,4 +36,11 @@
     <div id="main-container">
         <!-- Main content will be displayed here -->
     </div>
+
+    <!-- shown by player.js in place of the page when the server can't be reached -->
+    <div id="offline" class="offline" hidden>
+        <p class="mb-3">Can't reach Speler. Is the server running?</p>
+        <button type="button" class="btn btn-outline-secondary" id="offline-retry">Retry</button>
+        <p class="text-secondary small mt-3" id="offline-still" hidden>Still not reachable.</p>
+    </div>
 {% endblock %}

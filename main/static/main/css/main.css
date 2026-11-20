@@ -456,6 +456,16 @@ tr:hover .title-edit,
     pointer-events: none;
 }
 
+/* server unreachable: a centered message replaces the page */
+.offline:not([hidden]) {
+    position: fixed;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+}
+
 /* hide the old match while the next one loads */
 .rating-col:has(.rating-loader.htmx-request) #rating-container {
     visibility: hidden;

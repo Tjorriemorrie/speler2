@@ -1,3 +1,9 @@
+// Timezone settings: set straight away, not on ready - the player's load request fires before
+// jQuery's ready, and beforeunload clears the cookie, so it went out without one (i.e. in UTC)
+const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+document.cookie = "django_timezone=" + timezone + "; path=/; SameSite=Lax";
+console.log('Timezone set ', timezone)
+
 $(document).ready(function () {
     // htmx.logger = function (elt, event, data) {
     //     if (console) {
@@ -5,10 +11,24 @@ $(document).ready(function () {
     //     }
     // }
 
-    // Timezone settings
-    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    document.cookie = "django_timezone=" + timezone + "; path=/; SameSite=Lax";
-    console.log('Timezone set ', timezone)
+    // Server unreachable (htmx got no response at all): replace the page with a message and a
+    // retry button instead of leaving empty panels and a spinner that never stops
+    $(document).on('htmx:error', function (event) {
+        const {ctx, error} = event.detail;
+        if (!ctx || ctx.response || error?.name === 'AbortError') {
+            return;
+        }
+        console.log('server unreachable', error);
+        $('#offline').prop('hidden', false).siblings().hide();
+    });
+
+    // reload only once the server answers, otherwise the browser shows its own error page
+    $('#offline-retry').on('click', function () {
+        $('#offline-still').prop('hidden', true);
+        fetch('/', {cache: 'no-store'})
+            .then(() => window.location.reload())
+            .catch(() => $('#offline-still').prop('hidden', false));
+    });
 
     // Initialize the player once
     const $audioElement = $('audio.plyr');

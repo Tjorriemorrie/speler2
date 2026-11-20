@@ -1795,6 +1795,15 @@ def test_next_song_ignores_previous_song_on_refresh(
     mock_played.assert_not_called()
 
 
+@patch('main.views.Song.file_exists', autospec=True, return_value=True)
+def test_next_song_is_never_cached(mock_exists, client, playing_session):
+    """The browser must not replay a stored player on a restored page."""
+    with patch('main.views.get_next_song', return_value=playing_session):
+        response = client.get(reverse('next_song'), {'refresh': '1'})
+
+    assert 'no-store' in response['Cache-Control']
+
+
 @patch('main.views.get_next_song', autospec=True)
 def test_next_song_skips_missing_file_without_validating(mock_next, client, catalog):
     """A song whose file is gone is skipped and named in a warning, not deleted."""
