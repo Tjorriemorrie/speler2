@@ -32,7 +32,7 @@ SPACE_PER_ARTIST = 2
 SONG_LENGTH = 4 * 60
 RATINGS_WINDOW = 30 * 60
 NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
-NEXT_SONG_LOOKUP_LIMIT = 100
+NEXT_SONG_LOOKUP_LIMIT = 50
 COUNTDOWN_MIN_POINTS = 2
 # a rating match needs the ratings window to hold songs that have been played
 # before, so until the window has this many plays a brand new song is skipped
@@ -205,7 +205,7 @@ def get_next_song(exclude_ids: Iterable[int] = ()) -> Song:  # noqa: PLR0912, PL
             history_artist_names.add(song.artist.name)
             # logger.info(f'Found next song {next_song}')
 
-    # If no valid song is found, randomly select one from the top 100
+    # If no valid song is found, randomly select one from the lookup window
     if not next_song and songs:
         next_song = random.choice(played_songs if skip_new_songs else songs)  # noqa: S311
         cowbell_path = settings.SOUNDS_DIR / 'mixkit-cowbell-sharp-hit-1743.wav'
