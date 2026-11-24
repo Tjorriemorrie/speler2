@@ -442,6 +442,40 @@ def song_file(editable_song, settings, tmp_path):
     return editable_song
 
 
+
+def _get_audio(client, song, **headers):
+    return client.get(reverse('song_file', args=[song.id, song.file_path().name]), headers=headers)
+
+
+def test_song_file_serves_whole_file_and_advertises_ranges(client, song_file):
+    song_file.file_path().write_bytes(b'0123456789')
+
+    response = _get_audio(client, song_file)
+
+    assert (response.status_code, response['Accept-Ranges']) == (200, 'bytes')
+    assert b''.join(response.streaming_content) == b'0123456789'
+
+
+def test_song_file_resumes_from_requested_byte(client, song_file):
+    song_file.file_path().write_bytes(b'0123456789')
+
+    response = _get_audio(client, song_file, Range='bytes=4-')
+
+    assert (response.status_code, response['Content-Range']) == (206, 'bytes 4-9/10')
+    assert b''.join(response.streaming_content) == b'456789'
+
+
+def test_song_file_rejects_range_past_the_end(client, song_file):
+    song_file.file_path().write_bytes(b'0123456789')
+
+    response = _get_audio(client, song_file, Range='bytes=10-')
+
+    assert response.status_code == 416
+
+
+def test_song_file_missing_file_is_404(client, editable_song):
+    assert _get_audio(client, editable_song).status_code == 404
+
 def _tags(song, **overrides):
     """Parsed metadata matching the song as stored."""
     return {

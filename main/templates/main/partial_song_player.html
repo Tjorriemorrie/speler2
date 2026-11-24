@@ -1,4 +1,3 @@
-{% load static %}
 {% load fmt %}
 <div class="row">
 
@@ -19,7 +18,7 @@
     <div class="col-8 col-lg-9" id="songData"
          data-rating="{{ song.rating }}"
          data-songtitle="{{ song.name }} | {{ song.artist.name }}"
-         data-songsrc="{% static song.rel_path %}"
+         data-songsrc="{% url 'song_file' song.id song.file_path.name %}"
     >
         <h3 class="mb-2 title-font ellipsis">
             {{ song.name }}

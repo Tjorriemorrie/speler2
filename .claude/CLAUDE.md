@@ -129,6 +129,13 @@ without requiring the user to repeat the information later.
   newer than the requested song's audio file; browsers get `no-cache` + `Last-Modified` (the
   file's mtime) and revalidate. New art comes in by retagging the file, not via `recheckmetadata`.
 
+## Audio serving
+
+- The player streams from `song_file_view` (`/song/<id>/file/<basename>`), never `{% static %}`:
+  Django's static serve ignores `Range`, so when the browser dropped the stream it could not
+  resume, played out its buffer and fired `ended` mid song (counted and scrobbled as played).
+  The basename is only in the url so `player.js` can read the mime type off the extension.
+
 ## Play counting
 
 - `next_song_view` counts the session's previous song as played on every request (song ended,

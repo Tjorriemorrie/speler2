@@ -1,4 +1,5 @@
 import logging
+import mimetypes
 import re
 
 from curl_cffi.requests.exceptions import RequestException as CurlRequestException
@@ -6,7 +7,7 @@ from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
 from django.db.models import Max
-from django.http import Http404, HttpResponse
+from django.http import Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import get_conditional_response, patch_cache_control
 from django.utils.http import http_date
@@ -213,6 +214,59 @@ def album_art_view(request, song_id):
     if file_mtime:
         response['Last-Modified'] = http_date(file_mtime)
     patch_cache_control(response, public=True, no_cache=True)
+    return response
+
+
+RANGE_RE = re.compile(r'bytes=(\d+)-(\d*)$')
+AUDIO_CHUNK_SIZE = 64 * 1024
+
+
+def _read_file_range(path, start: int, length: int):
+    """Yield `length` bytes of the file from `start`."""
+    with path.open('rb') as f:
+        f.seek(start)
+        while length > 0:
+            chunk = f.read(min(AUDIO_CHUNK_SIZE, length))
+            if not chunk:
+                return
+            length -= len(chunk)
+            yield chunk
+
+
+def song_file_view(request, song_id, name):
+    """Stream the song's audio file, honouring Range requests.
+
+    Django's static serving ignores Range, so a dropped connection could not be resumed: the
+    browser played what it had buffered and fired `ended` mid song. `name` is only there to keep
+    the file's extension in the url, which the player reads the mime type from.
+    """
+    song = get_object_or_404(Song, id=song_id)
+    path = song.file_path()
+    try:
+        size = path.stat().st_size
+    except FileNotFoundError as exc:
+        raise Http404('Audio file not found') from exc
+    content_type = mimetypes.guess_type(path.name)[0] or 'application/octet-stream'
+
+    match = RANGE_RE.match(request.headers.get('Range', ''))
+    start, end = 0, size - 1
+    if match:
+        start = int(match[1])
+        end = min(int(match[2] or end), end)
+        if start > end:
+            response = HttpResponse(status=416)
+            response['Content-Range'] = f'bytes */{size}'
+            return response
+
+    response = StreamingHttpResponse(
+        _read_file_range(path, start, end - start + 1),
+        status=206 if match else 200,
+        content_type=content_type,
+    )
+    response['Accept-Ranges'] = 'bytes'
+    response['Content-Length'] = end - start + 1
+    if match:
+        response['Content-Range'] = f'bytes {start}-{end}/{size}'
     return response
 
 

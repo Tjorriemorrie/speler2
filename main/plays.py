@@ -32,7 +32,7 @@ SPACE_PER_ARTIST = 2
 SONG_LENGTH = 4 * 60
 RATINGS_WINDOW = 30 * 60
 NUM_SLOTS_IN_WINDOW = RATINGS_WINDOW / SONG_LENGTH
-NEXT_SONG_LOOKUP_LIMIT = 50
+NEXT_SONG_LOOKUP_LIMIT = 80
 COUNTDOWN_MIN_POINTS = 2
 # a rating match needs the ratings window to hold songs that have been played
 # before, so until the window has this many plays a brand new song is skipped
