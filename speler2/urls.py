@@ -26,6 +26,11 @@ urlpatterns = [
     path('next-song/', views.next_song_view, name='next_song'),
     path('next-rating/', views.next_rating_view, name='next_rating'),
     path('album-art/<int:song_id>/', views.album_art_view, name='album_art'),
+    path(
+        'artist/<int:artist_id>/background/',
+        views.artist_background_view,
+        name='artist_background',
+    ),
     path('album/<int:album_id>/', views.album_view, name='album'),
     path('artist/<int:artist_id>/', views.artist_view, name='artist'),
     path('list/song/', views.SongListView.as_view(), name='song_list'),

@@ -131,10 +131,65 @@ html {
 }
 
 
+/* artist photo behind the whole page, washed out under a white veil so the dark text stays
+   readable: lighter behind the header, where it shows, heavier behind the content */
+.artist-bg {
+    position: fixed;
+    inset: 0;
+    z-index: -1;
+    pointer-events: none;
+}
+
+.artist-bg img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    object-position: center 25%;
+    opacity: 0;
+    transition: opacity 1.5s;
+}
+
+.artist-bg img.loaded {
+    opacity: 1;
+}
+
+.artist-bg::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.85) 14em,
+    rgba(255, 255, 255, 0.9));
+}
+
+/* no solid white boxes on top of it: the veil already keeps the text readable. Stripes, hover
+   and the current row stay, as translucent shades. Dropdowns and form fields stay solid. */
+.table {
+    --bs-table-bg: transparent;
+}
+
+.card {
+    --bs-card-bg: transparent;
+}
+
+.js-plotly-plot .main-svg {
+    background: transparent !important;
+}
+
+/* the plot area keeps a hint of its tint so the gridlines still read */
+.js-plotly-plot .bg {
+    fill-opacity: 0.4 !important;
+}
+
+/* a white halo keeps the names readable over the busier part of the photo */
+#songData h3, #songData h4, #songData h5 {
+    text-shadow: 0 0 0.2em #fff, 0 0 0.5em #fff, 0 0 1em #fff;
+}
+
+
 /************************** NAVIGATION ***********************************/
 
 a.nav-link {
-    color: #aaa;
+    color: #777; /* the navbar is see-through over the artist photo, #aaa got lost in it */
     /*text-decoration: none;*/
     /*padding: 0.8em 0.5em;*/
 }
@@ -530,7 +585,7 @@ tr:hover .title-edit,
 
 
 tr.bg-secondary-subtle {
-    background-color: #f0f0f0 !important; /* Use !important to override table-striped */
+    background-color: rgba(0, 0, 0, 0.06) !important; /* Use !important to override table-striped */
 }
 
 

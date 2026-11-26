@@ -56,6 +56,11 @@ class Artist(Timestamp, Rank):
     genre = models.CharField(max_length=50, choices=GENRE_CHOICES, default=GENRE_HARD_ROCK)
     disco_at = models.DateTimeField(null=True, blank=True)
 
+    # background photos: when fanart.tv was last asked (also when it had none), and how many
+    # times one was shown, which picks the next in turn
+    backgrounds_at = models.DateTimeField(null=True, blank=True)
+    backgrounds_shown = models.IntegerField(default=0)
+
     def __str__(self):
         txt = f'<Artist-{self.id} {self.name}>'
         return unidecode(txt)

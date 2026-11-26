@@ -3,6 +3,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import List
 
+import mutagen
 from django.conf import settings
 from django.db import IntegrityError, transaction
 from django.db.models import Avg, FloatField, Max, Sum
@@ -240,6 +241,13 @@ def get_flac_metadata(file_path) -> dict:
     info['year'] = int(year_raw) if year_raw.isdigit() else 0
 
     return info
+
+
+def read_artist_mbid(song: Song) -> str | None:
+    """Get the MusicBrainz album artist id the file is tagged with (Picard writes it)."""
+    audio = mutagen.File(song.file_path(), easy=True)
+    ids = audio.get('musicbrainz_albumartistid') if audio else None
+    return ids[0] if ids else None
 
 
 def validate_songs(*args, delete: bool = True, **kwargs) -> List[Song]:

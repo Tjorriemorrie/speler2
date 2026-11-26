@@ -230,6 +230,8 @@ USE_MP3 = env.bool('USE_MP3')
 USE_FLAC = env.bool('USE_FLAC', default=False)
 ALBUMS_DIR = BASE_DIR / '.albums'
 LYRICS_DIR = BASE_DIR / '.lyrics'
+# artist photos shown behind the player, one folder per artist slug
+ARTISTS_DIR = BASE_DIR / '.artists'
 
 STATICFILES_DIRS = [
     MUSIC_DIR,
@@ -244,5 +246,7 @@ LASTFM_ENABLE = bool(LASTFM_API_KEY and LASTFM_SECRET)
 LASTFM_SESSION_FILE = BASE_DIR / 'lastfm.session'
 
 HUGGING_FACE_API = env.str('HUGGING_FACE_API')
+
+FANARTTV_API_KEY = env.str('FANARTTV_API_KEY', '')
 
 SOUNDS_DIR = BASE_DIR / 'main' / 'static' / 'main' / 'sounds'

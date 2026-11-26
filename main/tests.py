@@ -11,13 +11,14 @@ import pytest
 from bs4 import BeautifulSoup
 from curl_cffi.requests.exceptions import RequestException as CurlRequestException
 from django.core.cache import cache, caches
-from django.core.management import call_command
+from django.core.management import CommandError, call_command
 from django.db import OperationalError
 from django.urls import reverse
 from django.utils import timezone
 from django.utils.text import slugify
 from unidecode import unidecode
 
+from main.backgrounds import fetch_backgrounds
 from main.discography import get_missing_songs, get_review_artist
 from main.lastfm_service import (
     artist_slug,
@@ -35,7 +36,7 @@ from main.lastfm_service import (
 from main.lyrics import BrowserCheckError, scrape_billboards
 from main.management.commands.fetchsimilars import MAX_FAILURES_IN_A_ROW
 from main.models import Album, Artist, History, Rating, Similar, Song
-from main.musicfiles import recheck_metadata
+from main.musicfiles import read_artist_mbid, recheck_metadata
 from main.plays import (
     MIN_HISTORY_FOR_NEW_SONGS,
     NUM_SLOTS_IN_WINDOW,
@@ -442,7 +443,6 @@ def song_file(editable_song, settings, tmp_path):
     return editable_song
 
 
-
 def _get_audio(client, song, **headers):
     return client.get(reverse('song_file', args=[song.id, song.file_path().name]), headers=headers)
 
@@ -475,6 +475,7 @@ def test_song_file_rejects_range_past_the_end(client, song_file):
 
 def test_song_file_missing_file_is_404(client, editable_song):
     assert _get_audio(client, editable_song).status_code == 404
+
 
 def _tags(song, **overrides):
     """Parsed metadata matching the song as stored."""
@@ -825,7 +826,7 @@ def test_update_similars_refetches_oldest_seed(similar_tracks, seed_songs):
 
     update_next_similar_song()
 
-    similar_tracks.assert_called_once_with('Måneskin', 'Beggin\' (Live)', SIMILARS_FETCH_LIMIT)
+    similar_tracks.assert_called_once_with('Måneskin', "Beggin' (Live)", SIMILARS_FETCH_LIMIT)
 
 
 def test_update_similars_skips_refetch_within_interval(similar_tracks, seed_songs):
@@ -1950,3 +1951,145 @@ def test_lyrics_view_renders_retry_form_on_error(mock_search, rf, db, error, sho
     response = lyrics_view(rf.get('/'), song.id)
 
     assert shown in response.content.decode()
+
+
+# artist backgrounds
+
+
+@patch('main.views.Song.file_exists', autospec=True, return_value=True)
+def test_next_song_shows_the_next_background_in_turn(mock_exists, client, playing_session):
+    """The player asks for the photo after the last one shown, and moves the turn on."""
+    with patch('main.views.get_next_song', return_value=playing_session):
+        response = client.get(reverse('next_song'), {'refresh': '1'})
+
+    assert '/background/?n=0' in response.content.decode()
+    assert Artist.objects.get(id=playing_session.artist_id).backgrounds_shown == 1
+
+
+@pytest.fixture()
+def backgrounds_dir(settings, tmp_path):
+    """An empty photo folder, with an api key set."""
+    settings.ARTISTS_DIR = tmp_path / 'artists'
+    settings.FANARTTV_API_KEY = 'key'
+    return settings.ARTISTS_DIR
+
+
+def test_artist_background_cycles_through_the_photos(client, editable_song, backgrounds_dir):
+    """Play number n gets photo n, wrapping around once each was shown."""
+    folder = backgrounds_dir / editable_song.artist.slug
+    folder.mkdir(parents=True)
+    (folder / 'a.jpg').write_bytes(b'a')
+    (folder / 'b.jpg').write_bytes(b'b')
+    editable_song.artist.backgrounds_at = timezone.now()
+    editable_song.artist.save()
+
+    response = client.get(reverse('artist_background', args=[editable_song.artist_id]), {'n': 3})
+
+    assert b''.join(response.streaming_content) == b'b'
+
+
+@patch('main.views.fetch_backgrounds', autospec=True)
+def test_artist_background_fetches_unasked_artist(
+    mock_fetch, client, editable_song, backgrounds_dir
+):
+    """An artist never fetched is fetched on the spot; still no photos is a 404."""
+    response = client.get(reverse('artist_background', args=[editable_song.artist_id]))
+
+    mock_fetch.assert_called_once_with(editable_song.artist)
+    assert response.status_code == 404
+
+
+FANART_IMAGES = [
+    {'id': '1', 'url': 'https://assets.fanart.tv/fanart/music/x/artistbackground/one.jpg'},
+    {'id': '2', 'url': 'https://assets.fanart.tv/fanart/music/x/artistbackground/two.jpg'},
+]
+
+
+def _fanart_get(status: int):
+    """Answer the fanart.tv api with FANART_IMAGES, and each image with its url."""
+
+    def get(url, **kwargs):
+        if 'webservice' in url:
+            return httpx2.Response(
+                status,
+                json={'artistbackground': FANART_IMAGES},
+                request=httpx2.Request('GET', url),
+            )
+        return httpx2.Response(200, content=url.encode(), request=httpx2.Request('GET', url))
+
+    return get
+
+
+@patch('main.backgrounds.read_artist_mbid', autospec=True, return_value='mbid')
+@patch('main.backgrounds.httpx2.get', autospec=True)
+def test_fetch_backgrounds_downloads_the_new_photos(
+    mock_get, mock_mbid, song_file, backgrounds_dir
+):
+    """Photos already on disk are not downloaded again, and the artist is marked fetched."""
+    mock_get.side_effect = _fanart_get(200)
+    folder = backgrounds_dir / song_file.artist.slug
+    folder.mkdir(parents=True)
+    (folder / '1.jpg').write_bytes(b'kept')
+
+    assert fetch_backgrounds(song_file.artist)
+
+    assert (folder / '2.jpg').read_bytes() == FANART_IMAGES[1]['url'].encode()
+    assert mock_get.call_count == 2
+    assert song_file.artist.backgrounds_at is not None
+
+
+@patch('main.backgrounds.read_artist_mbid', autospec=True, return_value='mbid')
+@patch('main.backgrounds.httpx2.get', autospec=True)
+def test_fetch_backgrounds_unknown_artist_is_done(mock_get, mock_mbid, song_file, backgrounds_dir):
+    """fanart.tv not knowing the artist is final: no photos, marked fetched."""
+    mock_get.side_effect = _fanart_get(404)
+
+    assert fetch_backgrounds(song_file.artist)
+
+    assert not (backgrounds_dir / song_file.artist.slug).exists()
+
+
+@patch('main.backgrounds.read_artist_mbid', autospec=True, return_value='mbid')
+@patch('main.backgrounds.httpx2.get', autospec=True)
+def test_fetch_backgrounds_failure_is_retried(mock_get, mock_mbid, song_file, backgrounds_dir):
+    """A failed fetch leaves the artist unmarked, to be asked again."""
+    mock_get.side_effect = _fanart_get(503)
+
+    assert not fetch_backgrounds(song_file.artist)
+
+    assert Artist.objects.get(id=song_file.artist_id).backgrounds_at is None
+
+
+@patch('main.backgrounds.httpx2.get', autospec=True)
+def test_fetch_backgrounds_without_mbid_asks_nothing(mock_get, editable_song, backgrounds_dir):
+    """Without an audio file to read the id from there is nothing to ask for."""
+    assert fetch_backgrounds(editable_song.artist)
+
+    mock_get.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    ('tags', 'mbid'), [({'musicbrainz_albumartistid': ['a', 'b']}, 'a'), ({}, None)]
+)
+def test_read_artist_mbid(editable_song, tags, mbid):
+    """The first album artist id is read off the tags; untagged files have none."""
+    with patch('main.musicfiles.mutagen.File', autospec=True, return_value=tags):
+        assert read_artist_mbid(editable_song) == mbid
+
+
+def test_fetchbackgrounds_needs_the_api_key(settings):
+    """Without a key the command stops before asking anything."""
+    settings.FANARTTV_API_KEY = ''
+
+    with pytest.raises(CommandError):
+        call_command('fetchbackgrounds')
+
+
+@patch('main.management.commands.fetchbackgrounds.fetch_backgrounds', autospec=True)
+def test_fetchbackgrounds_reports_the_failures(mock_fetch, editable_song, backgrounds_dir, capsys):
+    """Artists whose fetch failed are named for the next run."""
+    mock_fetch.return_value = False
+
+    call_command('fetchbackgrounds')
+
+    assert "failed=['Edit Artist']" in capsys.readouterr().out

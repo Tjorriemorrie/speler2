@@ -6,8 +6,8 @@ from curl_cffi.requests.exceptions import RequestException as CurlRequestExcepti
 from django.conf import settings
 from django.core.cache import cache
 from django.core.handlers.wsgi import WSGIRequest
-from django.db.models import Max
-from django.http import Http404, HttpResponse, StreamingHttpResponse
+from django.db.models import F, Max
+from django.http import FileResponse, Http404, HttpResponse, StreamingHttpResponse
 from django.shortcuts import get_object_or_404, render
 from django.utils.cache import get_conditional_response, patch_cache_control
 from django.utils.http import http_date
@@ -17,6 +17,7 @@ from django_tables2 import SingleTableView
 from mutagen import MutagenError
 from pylast import PyLastError
 
+from main.backgrounds import fetch_backgrounds, list_backgrounds
 from main.constants import GENRE_CHOICES
 from main.discography import get_missing_songs, get_review_artist
 from main.filters import AlbumFilter, ArtistFilter, SongFilter
@@ -113,6 +114,11 @@ def next_song_view(request: WSGIRequest):  # noqa: PLR0912 PLR0915
 
     # store for matches and history
     request.session['song_id'] = next_song.id
+
+    # every play shows the artist's next photo; the template reads the count from before this
+    Artist.objects.filter(id=next_song.artist_id).update(
+        backgrounds_shown=F('backgrounds_shown') + 1
+    )
 
     # Check if filter_facet is not None and has at least one item
     if filter_facet := cache.get('filter_facet'):
@@ -215,6 +221,22 @@ def album_art_view(request, song_id):
         response['Last-Modified'] = http_date(file_mtime)
     patch_cache_control(response, public=True, no_cache=True)
     return response
+
+
+def artist_background_view(request, artist_id):
+    """Return the artist's photo number `n`, cycling through all of them.
+
+    An artist never asked about is fetched here, so only the photo waits on fanart.tv and
+    never the player.
+    """
+    artist = get_object_or_404(Artist, id=artist_id)
+    if artist.backgrounds_at is None and settings.FANARTTV_API_KEY:
+        fetch_backgrounds(artist)
+    backgrounds = list_backgrounds(artist)
+    if not backgrounds:
+        raise Http404('No background photos for this artist')
+    n = int(request.GET.get('n', 0))
+    return FileResponse(backgrounds[n % len(backgrounds)].open('rb'))
 
 
 RANGE_RE = re.compile(r'bytes=(\d+)-(\d*)$')

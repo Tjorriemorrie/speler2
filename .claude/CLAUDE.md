@@ -129,6 +129,26 @@ without requiring the user to repeat the information later.
   newer than the requested song's audio file; browsers get `no-cache` + `Last-Modified` (the
   file's mtime) and revalidate. New art comes in by retagging the file, not via `recheckmetadata`.
 
+## Artist backgrounds (fanart.tv)
+
+- Every play shows a different photo of the artist full-page behind the UI (`main/backgrounds.py`).
+  Photos are fanart.tv `artistbackground`s, looked up by the MusicBrainz album artist id read off
+  the file's tags (`read_artist_mbid`; every file is Picard-tagged), so no name matching. Key:
+  `FANARTTV_API_KEY` in `.env`; without it nothing is fetched.
+- Stored in `ARTISTS_DIR/<artist slug>/<fanart id>.jpg` (`.artists/`, gitignored, ~5 MB per
+  artist). Images dropped in by hand are shown too. Rotation: `next_song_view` bumps
+  `Artist.backgrounds_shown`, the player asks for `?n=<count>` and the view serves the sorted
+  file list `[n % len]`, so all are shown before any repeats.
+- `Artist.backgrounds_at` marks fetched, also with none (fanart 404 or no MBID); other HTTP
+  errors leave it for retry. First pass: `manage.py fetchbackgrounds`; `--all` re-asks every
+  artist for new uploads (existing files are not downloaded again). An artist never fetched is
+  fetched inside the image request, so only the photo waits, never the player.
+- Readability: a white veil over the photo (`.artist-bg::after`, lighter behind the header,
+  heavier behind content) plus a white text halo on the player names. That veil is the only
+  white layer: navbar, cards, tables and plotly charts are transparent (stripes, hover and the
+  current row as translucent shades), so don't give a new container a solid white background.
+  Dropdowns and form fields stay solid. Re-check over the darkest photo after any change there.
+
 ## Audio serving
 
 - The player streams from `song_file_view` (`/song/<id>/file/<basename>`), never `{% static %}`:
