@@ -509,6 +509,12 @@ tr:hover .title-edit,
     justify-content: center;
 }
 
+/* tighter than the player title's 2em script line, so three cards fit the 12em header */
+#rating-container .card-title {
+    line-height: 1.5em;
+    padding-bottom: 0;
+}
+
 .rating-loader {
     position: absolute;
     inset: 0;

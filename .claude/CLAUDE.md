@@ -117,10 +117,12 @@ without requiring the user to repeat the information later.
 
 ## Player header
 
-- The header row's `min-height` (14em) is what the three rating cards filling it need at every
-  breakpoint; the album art sizes only itself (fixed height, natural width, no frame). Never let
-  the art set the row height again: shorter art clipped the cards. Measure the cards
-  (`scrollHeight` vs `clientHeight`) at 400/800/1100/1920px after changing either.
+- The header row's `min-height` (12em, the user's choice) has to fit the three rating cards that
+  fill it; the album art sizes only itself (fixed height, natural width, no frame). Never let the
+  art set the row height: shorter art clipped the cards. To fit 12em the card titles use a 1.5em
+  line and no bottom padding (`#rating-container .card-title`); the player title keeps its 2em.
+  Measure the cards (`scrollHeight` vs `clientHeight`, art and no art) at 400/800/1100/1920px
+  after changing any of these: there is no slack left on phones.
 
 ## Metadata edits
 
