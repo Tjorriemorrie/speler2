@@ -158,8 +158,8 @@ html {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.75) 14em,
-    rgba(255, 255, 255, 0.8));
+    background: linear-gradient(rgba(255, 255, 255, 0.5), rgba(255, 255, 255, 0.8) 14em,
+    rgba(255, 255, 255, 0.85));
 }
 
 /* no solid white boxes on top of it: the veil already keeps the text readable. Stripes, hover
