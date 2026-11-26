@@ -119,7 +119,9 @@ without requiring the user to repeat the information later.
 
 - The header row's `min-height` (12em, the user's choice) has to fit the three rating cards that
   fill it; the album art sizes only itself (fixed height, natural width, no frame). Never let the
-  art set the row height: shorter art clipped the cards. To fit 12em the card titles use a 1.5em
+  art set the row height: shorter art clipped the cards. The art's 11.7em fits under 12em only
+  because its `<p>` has `mb-0`; the default 1rem margin made the row 11px taller once the player
+  loaded, a jump that looked like it came from the rating spinner going away. To fit 12em the card titles use a 1.5em
   line and no bottom padding (`#rating-container .card-title`); the player title keeps its 2em.
   Measure the cards (`scrollHeight` vs `clientHeight`, art and no art) at 400/800/1100/1920px
   after changing any of these: there is no slack left on phones.
