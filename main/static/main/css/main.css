@@ -515,6 +515,18 @@ tr:hover .title-edit,
     padding-bottom: 0;
 }
 
+/* !important to beat the global .card-body padding, which the artist view's cards keep; not
+    stretched, so the card's justify-content centers the text vertically */
+#rating-container .card-body {
+    padding: 0.2em 0.5em !important;
+    flex: 0 0 auto;
+}
+
+/* lines the artist up under the handwritten title, which starts further in */
+#rating-container .card-subtitle {
+    padding-left: 0.5em;
+}
+
 .rating-loader {
     position: absolute;
     inset: 0;
