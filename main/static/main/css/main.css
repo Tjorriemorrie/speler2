@@ -181,9 +181,9 @@ html {
     fill-opacity: 0.4 !important;
 }
 
-/* a white halo keeps the names readable over the busier part of the photo */
-#songData h3, #songData h4, #songData h5 {
-    text-shadow: 0 0 0.2em #fff, 0 0 0.5em #fff, 0 0 1em #fff;
+/* a soft white halo on all text, so it holds up wherever the photo is busy */
+body {
+    text-shadow: 0 0 0.15em #fff, 0 0 0.4em rgba(255, 255, 255, 0.8);
 }
 
 
