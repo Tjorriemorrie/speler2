@@ -155,7 +155,7 @@ without requiring the user to repeat the information later.
   artist for new uploads (existing files are not downloaded again). An artist never fetched is
   fetched inside the image request, so only the photo waits, never the player.
 - Readability: a white veil over the photo (`.artist-bg::after`, lighter behind the header,
-  heavier behind content) plus a soft white text halo on all text (on `body`). That veil is the only
+  heavier behind content). No text shadow/halo: the user had it removed. That veil is the only
   white layer: navbar, cards, tables and plotly charts are transparent (stripes, hover and the
   current row as translucent shades), so don't give a new container a solid white background.
   Dropdowns and form fields stay solid. Re-check over the darkest photo after any change there.
