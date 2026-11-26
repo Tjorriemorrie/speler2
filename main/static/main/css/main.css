@@ -107,7 +107,7 @@ html {
     loads, and wide or missing art can't squeeze the cards. em follows the font size, so this
     is 157px on phones and tablets, 179px on laptops, 224px from 1200px up */
 .header {
-    min-height: 14em;
+    min-height: 12em;
 }
 
 @media (max-width: 576px) {
@@ -158,8 +158,8 @@ html {
     content: '';
     position: absolute;
     inset: 0;
-    background: linear-gradient(rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.85) 14em,
-    rgba(255, 255, 255, 0.9));
+    background: linear-gradient(rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.75) 14em,
+    rgba(255, 255, 255, 0.8));
 }
 
 /* no solid white boxes on top of it: the veil already keeps the text readable. Stripes, hover
