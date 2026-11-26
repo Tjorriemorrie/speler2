@@ -103,10 +103,11 @@ html {
 
 /************************** HEADER ***********************************/
 
-/* give header a minimum height
-    it prevents jumps on load */
+/* set by the three rating cards that fill the row, not by the art: no jump when the player
+    loads, and wide or missing art can't squeeze the cards. em follows the font size, so this
+    is 157px on phones and tablets, 179px on laptops, 224px from 1200px up */
 .header {
-    min-height: 8em;
+    min-height: 14em;
 }
 
 @media (max-width: 576px) {
@@ -400,13 +401,19 @@ tr:hover .title-edit,
 
 /************************** PLAYER ***********************************/
 
-/* a fixed square whatever the art's shape (or none: the empty alt leaves a blank square), so
-    the header row - and the rating cards that fill it - always get the same height */
+/* just the art, at a fixed height and its own width; contain only kicks in when the column is
+    narrower than the art */
 .player-art {
-    width: 13em;
-    height: 13em;
+    height: 11.7em;
     max-width: 100%;
     object-fit: contain;
+}
+
+/* on phones the column is narrower than that, so the art fits its width instead */
+@media (max-width: 575.98px) {
+    .player-art {
+        height: 6.5em;
+    }
 }
 
 

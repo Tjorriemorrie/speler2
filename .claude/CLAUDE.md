@@ -115,6 +115,13 @@ without requiring the user to repeat the information later.
   sets them: song title `title-font`, artist `artist-font` (wrapped in `<em>`), album `album-font`.
   Tables keep the plain table font.
 
+## Player header
+
+- The header row's `min-height` (14em) is what the three rating cards filling it need at every
+  breakpoint; the album art sizes only itself (fixed height, natural width, no frame). Never let
+  the art set the row height again: shorter art clipped the cards. Measure the cards
+  (`scrollHeight` vs `clientHeight`) at 400/800/1100/1920px after changing either.
+
 ## Metadata edits
 
 - Track titles are editable inline on the album track listing (pencil appears on row hover,

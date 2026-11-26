@@ -15,7 +15,7 @@
                hx-target="#main-container"
                hx-swap="innerHTML"
                hx-trigger="click">
-            <img class="img-thumbnail player-art" src="{% url 'album_art' song.id %}"
+            <img class="player-art" src="{% url 'album_art' song.id %}"
                  title="{{ song.album.name }}" alt=""/>
             </a>
         </p>
